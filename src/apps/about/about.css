@@ -1,0 +1,63 @@
+/**
+ * Styles for the About BrowserOS app. Scoped under .about-app so it
+ * can never leak into other window content.
+ */
+
+.about-app {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  height: 100%;
+}
+
+.about__heading {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  background: var(--color-accent-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.about__version {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin-top: calc(var(--space-2) * -1);
+}
+
+.about__description {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.about__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-surface-glass-border);
+}
+
+.about__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+}
+
+.about__label {
+  color: var(--color-text-tertiary);
+}
+
+.about__value {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+}
+
+.about__status {
+  color: var(--color-success);
+  font-weight: 600;
+}

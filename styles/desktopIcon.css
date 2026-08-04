@@ -1,0 +1,142 @@
+/**
+ * Desktop icon and rectangle-selection (marquee) styles. Positioning
+ * (left/top) is set inline by DesktopIconView/DesktopManager — this
+ * file only owns appearance and transitions.
+ */
+
+.desktop-icon {
+  position: absolute;
+  width: 84px;
+  height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  cursor: default;
+  touch-action: none;
+  transition: left var(--duration-normal) var(--ease-standard),
+              top var(--duration-normal) var(--ease-standard),
+              background var(--duration-fast) var(--ease-sharp);
+}
+
+.desktop-icon:hover {
+  background: var(--color-surface-glass);
+}
+
+.desktop-icon:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+}
+
+.desktop-icon--selected {
+  background: var(--icon-selection-color);
+}
+
+.desktop-icon--selected:hover {
+  background: var(--icon-selection-color);
+}
+
+.desktop-icon--dragging {
+  transition: none;
+  z-index: 2;
+  opacity: 0.85;
+}
+
+.desktop-icon--cut {
+  opacity: 0.5;
+}
+
+.desktop-icon--renaming {
+  z-index: 4;
+  background: var(--color-surface-glass-strong);
+}
+
+.desktop-icon__glyph {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-glass-strong);
+  border: 1px solid var(--color-surface-glass-border);
+}
+
+.desktop-icon__label {
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+  text-align: center;
+  line-height: 1.3;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* ---- Inline rename ---- */
+.desktop-icon__rename-input {
+  width: 100%;
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-void);
+  border: 1px solid var(--color-accent-primary);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.desktop-icon__rename-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(124, 108, 246, 0.35);
+}
+
+.desktop-icon__rename-error {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  width: max-content;
+  max-width: 180px;
+  border-radius: var(--radius-sm);
+  background: var(--color-danger);
+  color: #ffffff;
+  font-size: var(--text-xs);
+  line-height: 1.3;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  display: none;
+}
+
+.desktop-icon--rename-error .desktop-icon__rename-error {
+  display: block;
+}
+
+.desktop-icon--rename-error .desktop-icon__rename-input {
+  border-color: var(--color-danger);
+}
+
+/* ---- Marquee (rectangle) selection ---- */
+.desktop-marquee {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  background: var(--icon-selection-color);
+  border: 1px solid var(--color-accent-primary);
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-icon {
+    transition: none;
+  }
+}

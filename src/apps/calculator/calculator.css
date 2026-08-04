@@ -1,0 +1,86 @@
+/**
+ * Styles for the Calculator app. Scoped under .calculator so it can
+ * never leak into other window content.
+ */
+
+.calculator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  outline: none;
+}
+
+.calculator__display {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 64px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--color-surface-glass-border);
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calculator__grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  gap: var(--space-2);
+}
+
+.calculator__key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-glass);
+  border: 1px solid var(--color-surface-glass-border);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  color: var(--color-text-primary);
+  transition: background var(--duration-fast) var(--ease-sharp),
+              transform var(--duration-fast) var(--ease-sharp);
+}
+
+.calculator__key:hover {
+  background: var(--color-surface-glass-strong);
+}
+
+.calculator__key:active {
+  transform: scale(0.95);
+}
+
+.calculator__key--spacer {
+  background: transparent;
+  border: none;
+}
+
+.calculator__key--operator {
+  color: var(--color-accent-secondary);
+  font-size: var(--text-xl);
+}
+
+.calculator__key--equals {
+  background: var(--color-accent-gradient);
+  color: var(--color-text-on-accent);
+  font-weight: 600;
+  border: none;
+}
+
+.calculator__key--equals:hover {
+  filter: brightness(1.08);
+}
+
+.calculator__key--function {
+  color: var(--color-text-secondary);
+}

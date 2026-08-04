@@ -1,0 +1,140 @@
+/**
+ * Dialog styles: backdrop + modal shell used by ConfirmDialog and
+ * PropertiesDialog. Kept separate from contextMenu.css/startMenu.css
+ * since dialogs are modal (own backdrop, own focus trap) rather than
+ * lightweight popovers.
+ */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0);
+  pointer-events: none;
+  transition: background var(--duration-normal) var(--ease-standard);
+}
+
+.dialog-backdrop--visible {
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+.dialog {
+  width: min(420px, calc(100vw - var(--space-6)));
+  padding: var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--color-taskbar-bg);
+  border: 1px solid var(--color-surface-glass-border);
+  backdrop-filter: blur(var(--blur-glass-strong));
+  -webkit-backdrop-filter: blur(var(--blur-glass-strong));
+  box-shadow: var(--shadow-window);
+  opacity: 0;
+  transform: scale(0.94) translateY(8px);
+  transition: opacity var(--duration-normal) var(--ease-standard),
+              transform var(--duration-normal) var(--ease-standard);
+}
+
+.dialog--visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.dialog__title {
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.dialog__body {
+  margin-bottom: var(--space-4);
+}
+
+.dialog__message {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.dialog__buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.dialog__button {
+  height: 36px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: background var(--duration-fast) var(--ease-sharp),
+              border-color var(--duration-fast) var(--ease-sharp);
+}
+
+.dialog__button--default {
+  background: var(--color-surface-glass);
+  border-color: var(--color-surface-glass-border);
+  color: var(--color-text-primary);
+}
+
+.dialog__button--default:hover {
+  background: var(--color-surface-glass-strong);
+}
+
+.dialog__button--primary {
+  background: var(--color-accent-gradient);
+  color: var(--color-text-on-accent);
+}
+
+.dialog__button--primary:hover {
+  filter: brightness(1.08);
+}
+
+.dialog__button--danger {
+  background: var(--color-danger);
+  color: #ffffff;
+}
+
+.dialog__button--danger:hover {
+  filter: brightness(1.1);
+}
+
+/* ---- Properties list ---- */
+.dialog__properties-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dialog__properties-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.dialog__properties-label {
+  flex-shrink: 0;
+  color: var(--color-text-tertiary);
+}
+
+.dialog__properties-value {
+  text-align: right;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog-backdrop,
+  .dialog {
+    transition: none;
+  }
+}

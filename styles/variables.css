@@ -1,0 +1,119 @@
+/**
+ * Design tokens for BrowserOS.
+ * Every color, spacing, and motion value used anywhere in the UI must
+ * come from here — never hardcode a hex value or a magic number in a
+ * component stylesheet.
+ *
+ * Theme switching works by swapping the `data-theme` attribute on
+ * <html>; ThemeManager (src/core/theme.js) is the only module allowed
+ * to change that attribute.
+ */
+
+:root,
+[data-theme="dark"] {
+  /* ---- Surfaces ---- */
+  --color-bg-void: #0a0c12;
+  --color-bg-void-gradient-a: #0a0c12;
+  --color-bg-void-gradient-b: #131726;
+
+  --color-surface-glass: rgba(255, 255, 255, 0.055);
+  --color-surface-glass-strong: rgba(255, 255, 255, 0.09);
+  --color-surface-glass-border: rgba(255, 255, 255, 0.09);
+  --color-surface-glass-border-strong: rgba(255, 255, 255, 0.16);
+
+  --color-taskbar-bg: rgba(18, 20, 30, 0.55);
+  --color-taskbar-border: rgba(255, 255, 255, 0.08);
+
+  /* ---- Accent duo (signature) ---- */
+  --color-accent-primary: #7c6cf6;
+  --color-accent-primary-strong: #9d8bff;
+  --color-accent-secondary: #34e2c6;
+  --color-accent-gradient: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
+
+  /* ---- Text ---- */
+  --color-text-primary: #eef1f7;
+  --color-text-secondary: #97a0b3;
+  --color-text-tertiary: #5b6478;
+  --color-text-on-accent: #0a0c12;
+
+  /* ---- Semantic ---- */
+  --color-danger: #f2495c;
+  --color-success: #34e2a6;
+  --color-warning: #f5b955;
+
+  /* ---- Blur ---- */
+  --blur-glass: 24px;
+  --blur-glass-strong: 40px;
+
+  /* ---- Radius ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-round: 999px;
+
+  /* ---- Spacing scale (4px base) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* ---- Typography ---- */
+  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  --font-body: "Inter", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", monospace;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
+  /* ---- Motion ---- */
+  --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-sharp: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 400ms;
+
+  /* ---- Elevation ---- */
+  --shadow-window: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --shadow-taskbar: 0 -4px 30px rgba(0, 0, 0, 0.3);
+  --shadow-focus-ring: 0 0 0 2px var(--color-bg-void), 0 0 0 4px var(--color-accent-primary);
+
+  /* ---- Layout constants ---- */
+  --taskbar-height: 52px;
+  --icon-grid-cell: 96px;
+
+  /* ---- Window chrome ---- */
+  --window-titlebar-height: 40px;
+  --window-min-width: 320px;
+  --window-min-height: 200px;
+  --window-resize-handle-size: 6px;
+  --window-resize-corner-size: 14px;
+
+  /* ---- Desktop icons ---- */
+  --icon-grid-inset: 24px;
+  --icon-size: 48px;
+  --icon-selection-color: rgba(124, 108, 246, 0.28);
+
+  /* ---- Context menu ---- */
+  --context-menu-width: 220px;
+
+  /* ---- Start menu ---- */
+  --start-menu-width: 400px;
+  --start-menu-max-height: 560px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
+}

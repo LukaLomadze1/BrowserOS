@@ -1,0 +1,34 @@
+/**
+ * Styles for the Recycle Bin placeholder. Scoped under .recycle-bin.
+ */
+
+.recycle-bin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-2);
+  height: 100%;
+  color: var(--color-text-secondary);
+}
+
+.recycle-bin__glyph {
+  font-size: 40px;
+  color: var(--color-text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.recycle-bin__message {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.recycle-bin__hint {
+  margin: 0;
+  max-width: 260px;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}

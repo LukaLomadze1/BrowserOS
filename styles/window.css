@@ -1,0 +1,182 @@
+/**
+ * Window chrome. Every rule here derives from the tokens in
+ * variables.css — no hardcoded colors, no magic pixel values outside
+ * the window-specific tokens declared there.
+ */
+
+.window {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-surface-glass);
+  border: 1px solid var(--color-surface-glass-border);
+  backdrop-filter: blur(var(--blur-glass));
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  box-shadow: var(--shadow-window);
+  pointer-events: auto;
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition: box-shadow var(--duration-fast) var(--ease-sharp),
+              border-color var(--duration-fast) var(--ease-sharp),
+              opacity var(--duration-normal) var(--ease-standard),
+              transform var(--duration-normal) var(--ease-standard);
+}
+
+.window--active {
+  border-color: var(--color-surface-glass-border-strong);
+  box-shadow: var(--shadow-window), 0 0 0 1px var(--color-accent-primary);
+}
+
+.window--inactive .window__titlebar {
+  opacity: 0.72;
+}
+
+.window--minimized {
+  display: none;
+}
+
+.window--maximized {
+  border-radius: 0;
+}
+
+.window--entering {
+  opacity: 0;
+  transform: scale(0.96) translateY(8px);
+}
+
+.window--exiting {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+}
+
+/* ---- Titlebar ---- */
+.window__titlebar {
+  flex-shrink: 0;
+  height: var(--window-titlebar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  background: var(--color-surface-glass-strong);
+  border-bottom: 1px solid var(--color-surface-glass-border);
+  cursor: default;
+  touch-action: none;
+  transition: opacity var(--duration-fast) var(--ease-sharp);
+}
+
+.window__titlebar-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.window__icon {
+  flex-shrink: 0;
+  font-size: var(--text-md);
+  line-height: 1;
+}
+
+.window__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.window__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.window__control {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  line-height: 1;
+  color: var(--color-text-secondary);
+  transition: background var(--duration-fast) var(--ease-sharp),
+              color var(--duration-fast) var(--ease-sharp);
+}
+
+.window__control:hover {
+  background: var(--color-surface-glass);
+  color: var(--color-text-primary);
+}
+
+.window__control--close:hover {
+  background: var(--color-danger);
+  color: #ffffff;
+}
+
+/* ---- Body ---- */
+.window__body {
+  flex: 1;
+  overflow: auto;
+  background: rgba(10, 12, 18, 0.25);
+  padding: var(--space-5);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+}
+
+/* ---- Resize handles ----
+ * Sit flush against the window's own edge (not straddling the
+ * border), so overflow:hidden on .window never clips them.
+ */
+.window__resize-handle {
+  position: absolute;
+  z-index: 2;
+}
+
+.window__resize-handle--n,
+.window__resize-handle--s {
+  left: var(--window-resize-corner-size);
+  right: var(--window-resize-corner-size);
+  height: var(--window-resize-handle-size);
+  cursor: ns-resize;
+}
+.window__resize-handle--n { top: 0; }
+.window__resize-handle--s { bottom: 0; }
+
+.window__resize-handle--e,
+.window__resize-handle--w {
+  top: var(--window-resize-corner-size);
+  bottom: var(--window-resize-corner-size);
+  width: var(--window-resize-handle-size);
+  cursor: ew-resize;
+}
+.window__resize-handle--e { right: 0; }
+.window__resize-handle--w { left: 0; }
+
+.window__resize-handle--ne,
+.window__resize-handle--nw,
+.window__resize-handle--se,
+.window__resize-handle--sw {
+  width: var(--window-resize-corner-size);
+  height: var(--window-resize-corner-size);
+}
+.window__resize-handle--ne { top: 0; right: 0; cursor: nesw-resize; }
+.window__resize-handle--nw { top: 0; left: 0; cursor: nwse-resize; }
+.window__resize-handle--se { bottom: 0; right: 0; cursor: nwse-resize; }
+.window__resize-handle--sw { bottom: 0; left: 0; cursor: nesw-resize; }
+
+.window--maximized .window__resize-handle {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .window {
+    transition: none;
+  }
+}

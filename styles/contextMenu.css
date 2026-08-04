@@ -1,0 +1,92 @@
+/**
+ * Generic context menu styles, used for both the desktop menu and
+ * per-icon menus (and any future caller — Explorer, Taskbar, etc).
+ */
+
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  width: var(--context-menu-width);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-taskbar-bg);
+  border: 1px solid var(--color-surface-glass-border);
+  backdrop-filter: blur(var(--blur-glass));
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  box-shadow: var(--shadow-window);
+  opacity: 0;
+  transform: scale(0.96) translateY(-4px);
+  transform-origin: top left;
+  transition: opacity var(--duration-fast) var(--ease-sharp),
+              transform var(--duration-fast) var(--ease-sharp);
+}
+
+.context-menu--visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.context-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-sharp);
+}
+
+.context-menu__item:hover {
+  background: var(--color-surface-glass-strong);
+}
+
+.context-menu__item:focus-visible {
+  outline: none;
+  background: var(--color-surface-glass-strong);
+  box-shadow: inset 0 0 0 1px var(--color-accent-primary);
+}
+
+.context-menu__item--disabled {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
+.context-menu__item--disabled:hover {
+  background: transparent;
+}
+
+.context-menu__item--has-submenu {
+  justify-content: space-between;
+}
+
+.context-menu__item--submenu-open {
+  background: var(--color-surface-glass-strong);
+}
+
+.context-menu__item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-menu__item-arrow {
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-md);
+}
+
+.context-menu__separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--color-surface-glass-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-menu {
+    transition: none;
+  }
+}

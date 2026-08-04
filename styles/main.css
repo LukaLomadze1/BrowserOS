@@ -1,0 +1,71 @@
+/**
+ * Base reset and typography for BrowserOS.
+ * Component-level styles live in their own files (e.g. desktop.css);
+ * this file only sets up the ground truth every screen inherits.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  color: var(--color-text-primary);
+  background: var(--color-bg-void);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+}
+
+#app-root {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+button:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--color-accent-primary);
+  color: var(--color-text-on-accent);
+}
+
+/* Thin, unobtrusive scrollbars — used once real app content exists */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-glass-strong);
+  border-radius: var(--radius-round);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
