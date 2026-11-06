@@ -41,6 +41,19 @@ then open the served URL.
   calendar data, and clock state live in `src/core/` and
   `src/components/`, not inside individual apps, so they keep working
   while the owning app's window is closed.
+- **Background services** (`src/core/services/serviceManager.js`) —
+  long-lived system components (notifications, the taskbar clock,
+  calendar reminders, alarms, monitors) are registered with
+  ServiceManager, which starts them in dependency order, prevents
+  double initialization, records failures, and stops them on unload.
+  See [Background services](#background-services).
+- **System shell** — the taskbar (`src/core/desktop.js`), the system
+  tray (`src/core/shell/trayManager.js`), and its panels
+  (`src/components/shell/`): Notification Center, Quick Settings, and
+  the date panel. See [System shell](#system-shell).
+- **Icons** (`src/utils/icons.js`) — an icon is either a text glyph or
+  a built-in line icon (`"icon:clock"`); every shell surface renders
+  icons through `renderIcon()` / `createIconElement()`.
 - **Settings** (`src/core/settings/`) — the single source of truth for
   every preference. See below.
 - **Keyboard shortcuts** (`src/core/keyboard/`) — one catalog and one
@@ -72,6 +85,9 @@ nothing needs a reload and every open window stays in sync.
 | `startMenu`    | `StartMenuManager`                                 | show pinned / recent apps / recent files, recent limits, pinned app list, search sources (apps, files, folders, settings), apps first, case-insensitive matching, result limit                           |
 | `fileExplorer` | every `ExplorerManager`                            | view (grid / list / details), extensions, hidden files, size / date / type columns, sort field and direction, folders first, startup location (incl. custom folder), reopen last location, open folders in same/new window, Trash confirmation |
 | `keyboard`     | `keyboardShortcuts`                                | Win/Meta opens Start, window shortcuts, application shortcuts                                                                                                                                            |
+| `notifications`| `notificationService`                              | Do Not Disturb, banner duration, message previews, sounds, history limit                                                                                                                                 |
+| `taskbar`      | `TrayManager`                                      | show time, show date, clock format (automatic / 12-hour / 24-hour), seconds                                                                                                                              |
+| `taskManager`  | every Task Manager window                          | refresh interval                                                                                                                                                                                         |
 
 Defaults for every key are in `settingsSchema.js`. Highlights:
 medium icons, normal spacing, double-click to open, grid view sorted
@@ -189,13 +205,20 @@ reference can never advertise a shortcut that doesn't work. Runtime
 definitions can be added with `keyboardShortcuts.register(definition)`;
 the reference updates automatically. Browser-reserved combinations
 (Ctrl + N, Ctrl + T, Ctrl + W, Ctrl + Shift + N/T, Alt + Tab) are
-deliberately not used, since a web page cannot intercept them.
+deliberately not used, since a web page cannot intercept them. The
+same applies to combinations the operating system keeps for itself,
+such as Ctrl + Shift + Esc and Win + N / Win + A on Windows, which is
+why Task Manager and the tray panels use the combinations below.
 
 | Shortcut                     | Action                                     | Context          |
 | ---------------------------- | ------------------------------------------ | ---------------- |
 | Win / ⌘                      | Toggle the Start Menu                      | Anywhere         |
 | Ctrl + Alt + T / E           | Open Terminal / File Explorer              | Anywhere         |
 | Ctrl + ,                     | Open Settings                              | Anywhere         |
+| Ctrl + Alt + Esc             | Open Task Manager                          | Anywhere         |
+| Alt + Shift + N              | Open or close the Notification Center      | Anywhere         |
+| Alt + Shift + A              | Open or close Quick Settings               | Anywhere         |
+| Esc                          | Close the open tray panel                  | Tray panel open  |
 | Alt + Shift + ↑ / ↓          | Maximize-restore / minimize active window  | Anywhere         |
 | Alt + Shift + W              | Close active window                        | Anywhere         |
 | Alt + \` / Alt + Shift + \`  | Cycle windows / back to previous window    | Anywhere         |
@@ -247,12 +270,14 @@ The full, always-current list is in **Settings › Keyboard Shortcuts**.
 | Settings      | `settings`      | System       | single    | —                                  |
 | About         | `about`         | System       | single    | —                                  |
 | Recycle Bin   | `recycle-bin`   | System       | single    | —                                  |
+| Task Manager  | `task-manager`  | System       | single    | —                                  |
 
 Every application is registered once in `src/main.js` and reaches the
 Start Menu (all apps, search, pinning) and the Settings pin list from
 that registration. Notes, Calendar, Calculator, Clock, File Explorer,
 Terminal, About, and Recycle Bin also have desktop shortcuts; Image
-Viewer is opened through files.
+Viewer is opened through files; Task Manager opens from the Start
+Menu, Ctrl + Alt + Esc, or a taskbar button's context menu.
 
 ### Building an application
 
@@ -260,10 +285,11 @@ Viewer is opened through files.
 appManager.register({
   id: "my-app",
   name: "My App",
-  icon: "★",
-  description: "One line shown in Start Menu search", // optional
+  icon: "icon:activity", // a glyph such as "★", or a built-in line icon
+  description: "One line shown in Start Menu search and Task Manager", // optional
   category: "Utilities", // optional
   singleInstance: true, // focus the open window instead of opening another
+  restartable: true, // optional; false hides Restart in Task Manager
   loader: () => import("./apps/my-app/main.js"), // loaded on first launch
 });
 ```
@@ -276,7 +302,8 @@ The module's default export extends `Application`
 | `launch(options)`        | The window is created. Returns `{ element, title?, icon?, width?, height?, minWidth?, minHeight?, … }`. `options` are the ones passed to `appManager.launch(id, options)`, e.g. `{ path }` when a file is opened. |
 | `onRelaunch(options)`    | A single-instance app is launched again while open (the window is already focused).              |
 | `onFocus()` / `onBlur()` | The app's window gains / loses focus.                                                             |
-| `close()`                | The window is closing. Release everything here: EventBus and settings subscriptions, timers, animation frames, observers, object URLs, document-level listeners. |
+| `close()`                | The window is closing — by its close button, a shortcut, End task, or a restart. Release everything here: EventBus and settings subscriptions, timers, animation frames, observers, object URLs, document-level listeners. |
+| `getCloseWarning()`      | Optional. Return a message when ending the application now would lose something (Notes returns one while a document can't be saved); Task Manager asks for confirmation first. |
 
 `this.appManager` lets an application open other applications;
 applications never call WindowManager directly. Window titles are
@@ -285,6 +312,31 @@ updated with `this.appManager.updateWindowTitle(this.windowId, title)`.
 Long-lived state that must outlive a window belongs in a service in
 `src/core/` (as Calendar and Clock do), not in the application, so
 closing a window never stops a reminder, alarm, or timer.
+
+### Application lifecycle
+
+Each window has its own `Application` instance, and the windows of one
+app form one *running application* (per-folder File Explorer windows
+belong to `file-explorer`). AppManager guarantees that:
+
+- app code loads on first launch; a module that fails to load, or a
+  `launch()` that throws, is reported as `application:crashed` (with a
+  notification) and leaves no half-created window behind;
+- a single-instance app launched again — even several times while its
+  first launch is still loading — focuses or reuses one window;
+- every way a window goes away runs the instance's `close()`, and an
+  exception thrown there is recorded instead of breaking the shell;
+- closing one window of a multi-window app never touches the others.
+
+```js
+appManager.getRunningApplications(); // [{ appId, name, icon, startedAt, status, errorCount, lastError, windows: [...] }]
+appManager.focusApplication("calculator"); // bring all its windows forward
+appManager.toggleApplicationMinimized("calculator");
+appManager.endApplication("calculator"); // remove every window now, running each close()
+await appManager.restartApplication("clock"); // end, then reopen the same windows with their launch options
+appManager.recordError("notes", error, "runtime"); // shown in Task Manager
+appManager.focusWindow(windowId); appManager.minimizeWindow(windowId); appManager.closeWindow(windowId);
+```
 
 ### Notes
 
@@ -435,13 +487,43 @@ means scripts, event handlers, and external resources inside them are
 never run or loaded. Unreadable or corrupt files show an error in the
 window. Opening a file always opens a new Image Viewer window.
 
+### Task Manager
+
+- **Applications.** One row per running application with its icon,
+  status (running, minimized, errors reported), number of windows,
+  running time, and recorded errors. A row expands to its windows, each
+  with Switch to, Minimize / Restore, and Close. Selected rows offer
+  Switch to, Minimize / Restore, Restart, and End task; the keyboard
+  works too (↑ / ↓ select, → / ← expand, Enter switches, Delete ends).
+  Rows can be sorted and filtered.
+- **Performance.** BrowserOS figures — running applications, open
+  windows, running services, timers scheduled by services,
+  notifications, errors since start, start time, page elements, and
+  EventBus subscriptions — and figures measured in or reported by the
+  browser: main-thread delay (measured by the application monitor),
+  frame rate (measured while the tab is shown), JavaScript heap (where
+  the browser exposes it), site storage, logical processors, and
+  approximate device memory. BrowserOS cannot read the device's real
+  CPU, memory, or disk usage, so none is shown; memory and storage
+  figures are labelled as the browser's estimates.
+- **Services.** Every background service with status, dependencies,
+  live details, and Start / Stop / Restart. Essential services can be
+  restarted but not stopped; stopping a service that others depend on
+  asks first and stops them too.
+
+Application and window changes appear immediately (event-driven, one
+render per frame, only changed cells updated). Timed measurements
+follow `taskManager.refreshInterval` and pause while Task Manager is
+minimized or the tab is hidden. Launch options:
+`{ tab: "applications" | "performance" | "services", select?: appId }`.
+
 ### Settings
 
 **Settings** opens from the Start Menu, the desktop's _Personalize_
 context-menu submenu, Ctrl + `,`, or `appManager.launch("settings")`.
 Pages: Appearance, Wallpaper, Desktop, Start Menu, File Explorer,
-Keyboard Shortcuts, and System (reset one category or everything,
-with confirmation). Every change applies immediately, every option can
+Notifications, Taskbar, Keyboard Shortcuts, and System (reset one
+category or everything, with confirmation). Every change applies immediately, every option can
 be reset individually, and the sidebar search jumps straight to a
 section. New pages are added by registering a category in
 `src/apps/settings/settingsCategories.js`.
@@ -516,29 +598,82 @@ generated PNG images and one SVG.
 
 ### Notifications
 
+`notificationService` (`src/core/notifications/notificationService.js`)
+is the one notification system for applications and the shell.
+
 ```js
 const handle = notificationService.notify({
-  title: "Timer finished",
-  body: "5:00",
-  icon: "⏱",
-  source: "clock",
-  urgency: "normal", // "alarm": announced assertively and never auto-dismissed
-  timeout: 8000, // 0 keeps it until dismissed
-  sound: "chime", // chime | bell | digital | soft | none
-  loopSound: false, // repeat until dismissed
+  title: "Timer finished", // required unless `message` is given
+  message: "5:00 timer",
+  type: "success", // info | success | warning | error
+  source: "clock", // app id, or "system"; names and icons the notification
+  icon: "icon:stopwatch", // optional; defaults to the source app's icon
+  duration: 8000, // banner time in ms; default from settings; 0 = until dismissed
+  persistent: false, // true keeps the banner until dismissed
+  urgency: "normal", // "alarm": announced assertively, never auto-closes, shown during Do Not Disturb
+  critical: false, // true: shown during Do Not Disturb
+  groupKey: "clock-timer", // related notifications share a banner and a Notification Center entry
+  action: { type: "launch", appId: "clock", options: { tab: "timer" } }, // or { type: "open", path }
+  onClick: () => {}, // this session only; takes precedence over `action`
   actions: [{ id: "restart", label: "Restart" }, { id: "dismiss", label: "Dismiss", primary: true }],
   onAction: (actionId) => {},
-  onDismiss: (reason) => {}, // "user" | "timeout" | "action" | "programmatic"
+  onDismiss: (reason) => {}, // banner closed: "user" | "timeout" | "action" | "programmatic"
+  sound: "chime", // chime | bell | digital | soft | none
+  loopSound: false,
+  history: true, // false: banner only, not kept in the Notification Center
 });
-handle.dismiss();
+handle.dismiss(); // remove it everywhere
+
+notificationService.success("Saved"); // also info(), warning(), error(); options as above
+notificationService.dismiss(id); // remove one notification (banner and history)
+notificationService.dismissAll(); // close every banner; history stays
+notificationService.clearHistory(); // empty the Notification Center
+notificationService.markAsRead(id); notificationService.markAllAsRead();
+notificationService.getNotifications({ unreadOnly: false }); // newest first
+notificationService.getUnreadCount();
+notificationService.activate(id); // what a click does (below)
+notificationService.setDoNotDisturb(true); notificationService.isDoNotDisturb();
 ```
 
-Notifications stack above the taskbar (at most four regular ones;
-alarms are never pushed out), pause their timeout while hovered or
-focused, and use `role="status"` or, for alarms, `role="alert"`.
-Sounds are synthesized with the Web Audio API
+**Lifecycle.** `notify()` validates its options (a notification
+without a title or message is rejected with a console warning and an
+inert handle; text is trimmed and length-limited), records the
+notification in the history, and shows a banner unless Do Not Disturb
+suppresses it. Banners close after their duration (hovering or
+focusing pauses the countdown), stay until dismissed when persistent
+or alarms, and are limited to four on screen — the oldest non-alarm
+banner makes room. Closing a banner marks it read; a banner that
+times out stays unread in the Notification Center. A new notification
+with the same `groupKey` as a banner on screen replaces it and shows
+how many it stands for.
+
+**Clicking** a banner or a Notification Center entry marks it read and
+runs its `onClick` (same session), else its serializable `action`
+(still works after a reload), else opens its source application. If
+the target no longer exists — a deleted file, an uninstalled app — a
+short notice says so instead.
+
+**Do Not Disturb** (`notifications.doNotDisturb`) hides banners and
+mutes sounds but still records every notification; alarms and
+`critical` warnings always appear. The tray bell shows a crossed-out
+bell while it is on.
+
+**History** is stored through StorageService
+(`notifications:history`), validated on load, and limited to
+`notifications.historyLimit` entries (20–200) and seven days. Runtime
+callbacks are never stored. Banners use `role="status"`, alarms
+`role="alert"`. Sounds are synthesized with the Web Audio API
 (`src/utils/alertSound.js`); browsers only allow audio after the user
 has interacted with the page, so before that, alerts are visual only.
+
+**Who notifies.** Calendar reminders (open the event), Clock alarms,
+timers, and missed alarms (open Clock), Notes save failures (once per
+failure, open the note), File Explorer bulk operations of ten or more
+items or taking over three seconds and failed multi-item operations
+(open the folder), Terminal commands that ran five seconds or more and
+finished while Terminal wasn't the active window, application crashes
+and errors (open Task Manager), and storage problems (open Settings ›
+System). Routine single-item actions don't notify.
 
 ### Dialogs
 
@@ -559,6 +694,103 @@ Custom forms pass their own content element plus `onBeforeClose`
 error) and use the shared `.dialog__form`, `.dialog__field`,
 `.dialog__input`, `.dialog__select`, and `.dialog__error` classes.
 
+## System shell
+
+**Taskbar.** Window buttons show the application's icon and title,
+stay next to the other windows of the same application, and are
+labelled "window 2 of 3" when an application has several. Clicking
+focuses, minimizes, or restores; the context menu (right-click, or
+Shift + F10 / the context-menu key) offers Restore / Minimize, Close
+window, Close all windows of the application, and Task Manager.
+
+**System tray** (`TrayManager`, mounted into the taskbar container that
+Desktop provides) holds, left to right: Quick Settings, the
+notification bell (with an unread count, and a crossed-out bell during
+Do Not Disturb), and the clock. Each button opens a panel
+(`ShellPanel`, `src/components/shell/shellPanel.js`):
+
+- panels open above the taskbar and above every application window
+  (the window layer is its own stacking context);
+- only one panel is open at a time, and panels and the Start Menu
+  close each other;
+- Escape (focus returns to the button) or a click outside closes a
+  panel; the button's `aria-expanded` follows it;
+- notification banners move aside while a panel is open.
+
+**Notification Center** — notifications grouped by application,
+newest first; related notifications collapse behind "N more"; unread
+dots, relative times, per-entry and per-application dismiss, Clear
+all, a Do Not Disturb switch, and an empty state. Entries shown while
+it was open are marked read when it closes.
+
+**Quick Settings** — toggles for Do Not Disturb, notification sounds,
+notification previews, transparency, and reduced motion; theme
+(dark / light / system), accent color, blur, and animation speed; links
+to Wallpaper, Desktop, Notifications, and all Settings. Every control
+reads and writes SettingsService, so it stays in sync with Settings
+windows and everything else. There are no volume, brightness, Wi-Fi,
+or Bluetooth controls: a web page can't control them.
+
+**Date panel** — the current time and date, a month calendar with
+previous / next / Today and keyboard navigation (arrows, Page Up / Down),
+dots on days with Calendar events, and Open Calendar; choosing a day
+opens Calendar at that date. Event editing stays in Calendar.
+
+The tray clock is updated by the `system-clock` service, which
+schedules each update for the next minute (or second) boundary and
+re-reads the time whenever the tab becomes visible, so it stays
+correct when the browser throttles background timers. Format and
+visibility come from the `taskbar.*` settings.
+
+## Background services
+
+```js
+serviceManager.register({
+  id: "my-sync", // unique
+  name: "My sync",
+  description: "Shown in Task Manager",
+  dependencies: ["notifications"], // started first, stopped after
+  essential: false, // true: can be restarted, not stopped
+  start: async () => {}, // acquire timers and listeners; recover persisted state
+  stop: () => {}, // release everything start() acquired
+  getDetails: () => ({ summary: "next run 10:00", timers: 1 }), // optional, for Task Manager
+});
+await serviceManager.start("my-sync"); // dependencies first; concurrent calls share one start
+await serviceManager.stop("my-sync"); // running dependents stop first
+await serviceManager.restart("my-sync");
+serviceManager.getServices(); // [{ id, name, status, dependencies, dependents, startedAt, error, startCount, summary, timers }]
+```
+
+Statuses are `stopped`, `starting`, `running`, `stopping`, and
+`failed`. A service is never started twice without being stopped,
+duplicate ids and dependency cycles are rejected at registration, a
+failing `start()` marks only that service (and services needing it)
+as failed with its error, and every running service is stopped on
+`pagehide`. Events: `service:registered`, `service:started`,
+`service:stopped`, `service:error`, `service:statusChanged`.
+
+| Service              | What it does                                                            | Depends on    |
+| -------------------- | ----------------------------------------------------------------------- | ------------- |
+| `notifications`      | Banners, Notification Center, Do Not Disturb (essential)                | —             |
+| `system-clock`       | Taskbar clock and date panel updates                                    | —             |
+| `calendar-reminders` | Calendar reminder checks                                                | notifications |
+| `clock-alarms`       | Alarms, snooze, timer completion, missed-alarm report                   | notifications |
+| `app-monitor`        | Attributes errors to applications; measures main-thread delay           | notifications |
+| `storage-monitor`    | Warns when settings or data can't be saved, or site storage is 90% full | notifications |
+
+**Application monitor.** Uncaught errors, unhandled rejections, and
+exceptions thrown by EventBus listeners are attributed to an
+application when their stack trace points into `src/apps/<id>/`; they
+are recorded on the application (Task Manager's Errors column) and
+produce at most one notification per application per minute.
+Main-thread delay is measured with a short heartbeat timer, ignoring
+time spent in a hidden tab.
+
+Services run only while BrowserOS is open in a browser tab; nothing
+runs after the tab closes. Services that matter across reloads keep
+their state in storage (alarm times, timer end times, fired reminders)
+and recover it when they start.
+
 ## Persistence
 
 | Data                             | Where                                                    |
@@ -569,6 +801,7 @@ error) and use the shared `.dialog__form`, `.dialog__field`,
 | Calculator history / preferences | StorageService: `calculator:history`, `calculator:preferences` |
 | Fired calendar reminders         | StorageService: `calendar:firedReminders` (pruned after 3 days) |
 | Alarms, timer, stopwatch, cities | StorageService: `clock:*`                                |
+| Notification history             | StorageService: `notifications:history` (limit and seven-day expiry) |
 | Settings                         | StorageService: `settings`                               |
 
 StorageService (`src/core/storage.js`) stores JSON in localStorage and
@@ -594,9 +827,30 @@ damaged storage never prevents BrowserOS from starting.
 | `clock:alarmTriggered`                                      | `{ alarm }`                           |
 | `clock:timerCompleted`                                      | `{ durationMs }`                      |
 | `clock:alarmsChanged` / `timerChanged` / `stopwatchChanged` / `worldClocksChanged` | `{}`   |
-| `notification:shown`                                        | `{ id, title, source }`               |
+| `notification:created`                                      | `{ id, notification, toast }`         |
+| `notification:shown`                                        | `{ id, title, source }` (banner shown) |
+| `notification:dismissed`                                    | `{ id, source, reason }` (banner closed) |
 | `notification:action`                                       | `{ id, actionId, source }`            |
-| `notification:dismissed`                                    | `{ id, source, reason }`              |
+| `notification:activated`                                    | `{ id, source }`                      |
+| `notification:read`                                         | `{ ids }`                             |
+| `notification:removed` / `notification:cleared`             | `{ id }` / `{}`                       |
+| `notification:historyChanged`                               | `{ total, unread }`                   |
+| `system:dndChanged`                                         | `{ enabled }`                         |
+| `system:trayUpdated`                                        | `{ unread, dnd }`                     |
+| `system:clockTick`                                          | `{ now }`                             |
+| `shell:panelOpened` / `shell:panelClosed`                   | `{ panel }`                           |
+| `application:started` / `application:stopped`               | `{ appId }`                           |
+| `application:focused`                                       | `{ appId, windowId }`                 |
+| `application:crashed` / `application:error`                 | `{ appId, phase, message }`           |
+| `application:restarted`                                     | `{ appId }`                           |
+| `service:started` / `service:stopped` / `service:registered` | `{ id }`                             |
+| `service:error`                                             | `{ id, message, phase }`              |
+| `service:statusChanged`                                     | `{ id, status }`                      |
+| `window:titleChanged`                                       | `{ id, title }`                       |
+| `storage:writeFailed`                                       | `{ key, message }`                    |
+
+Request events: `shell:togglePanel` `{ panel }`, `shell:closePanels`,
+`startmenu:close` `{ restoreFocus }`.
 
 VFS changes are announced as `filesystem:fileCreated`,
 `filesystem:fileModified`, `filesystem:fileRenamed`,
@@ -606,9 +860,10 @@ that show files subscribe to these instead of polling.
 
 ## Known limitations
 
-- Reminders, alarms, timers, and notifications only work while
-  BrowserOS is open in a browser tab. Nothing is delivered while it is
-  closed, and the operating system's notification center is not used.
+- Reminders, alarms, timers, notifications, and every background
+  service only run while BrowserOS is open in a browser tab. Nothing
+  is delivered while it is closed, and the operating system's
+  notification center is not used.
   At the next start, one-time alarms and timers that came due are
   reported as missed; missed repeating alarms and calendar reminders
   are not.
@@ -635,3 +890,15 @@ that show files subscribe to these instead of polling.
   undo and redo are available for text in Notes.
 - Settings and application data are stored per browser profile; there
   is no import/export or sync.
+- All applications share the page's single main thread, so Task
+  Manager can detect that BrowserOS was unresponsive but not which
+  application caused it; it can't measure CPU, memory, or disk use of
+  individual applications or of the device.
+- Application errors are attributed only when their stack trace points
+  into the application's own folder; other errors are counted as
+  system errors.
+- Notification history keeps text and serializable actions only;
+  action buttons such as Snooze work while their banner is on screen.
+- There is no window overview (Win + Tab), and Win-key combinations
+  other than Win alone aren't used, because the operating system
+  handles them before the browser sees them.

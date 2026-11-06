@@ -51,7 +51,7 @@ export default class KeyboardPage extends SettingsPage {
           this.toggleRow(
             "keyboard.appShortcuts",
             "Application shortcuts",
-            "Open Terminal, File Explorer, and Settings from anywhere."
+            "Open Terminal, File Explorer, Settings, Task Manager, the Notification Center, and Quick Settings from anywhere."
           ).element,
         ],
       }),

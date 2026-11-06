@@ -269,6 +269,23 @@ export function createCommandRegistry() {
     ctx.print("guest");
   });
 
+  register("sleep", "Wait for a number of seconds (Ctrl + C interrupts)", (args, ctx) => {
+    const seconds = Number(args[0]);
+    if (args.length === 0) throw new Error("sleep: missing operand");
+    if (!Number.isFinite(seconds) || seconds < 0 || seconds > 3600) throw new Error(`sleep: invalid time interval "${args[0]}" (0 to 3600 seconds)`);
+    return new Promise((resolve, reject) => {
+      const timer = window.setTimeout(resolve, seconds * 1000);
+      ctx.signal?.addEventListener(
+        "abort",
+        () => {
+          window.clearTimeout(timer);
+          reject(new Error("sleep: interrupted"));
+        },
+        { once: true }
+      );
+    });
+  });
+
   register("version", "Print the BrowserOS version", (args, ctx) => {
     ctx.print("BrowserOS 0.1 \u2014 Terminal 1.0");
   });

@@ -23,6 +23,7 @@
 
 import { Application } from "../../core/application.js";
 import { eventBus } from "../../core/eventBus.js";
+import { notificationService } from "../../core/notifications/notificationService.js";
 import { vfs } from "../../core/vfs/virtualFileSystem.js";
 import { keyboardShortcuts } from "../../core/keyboard/keyboardShortcuts.js";
 import { ContextMenu } from "../../components/context-menu/contextMenu.js";
@@ -608,6 +609,7 @@ export default class NotesApp extends Application {
           window.clearTimeout(this._timers.draft);
         }
         this._saveError = null;
+        this._saveFailureNotified = false;
         if (!this._closed) {
           this._setStatus(this._dirty ? "Unsaved changes" : "Saved");
           this._renderDocumentChrome();
@@ -617,6 +619,7 @@ export default class NotesApp extends Application {
         this._saveError = error.message;
         this._library.saveDraft(doc.entry.id, doc.kind, content);
         if (!this._closed) this._setStatus(`Couldn't save: ${error.message}`, true);
+        this._notifySaveFailure(doc, error);
       }
     })();
     try {
@@ -624,6 +627,36 @@ export default class NotesApp extends Application {
     } finally {
       this._saving = null;
     }
+  }
+
+  /**
+   * Tell the user once per failure streak (not on every retry) that a
+   * document couldn't be saved. Clicking the notification opens it.
+   * @param {object} doc
+   * @param {Error} error
+   * @returns {void}
+   */
+  _notifySaveFailure(doc, error) {
+    if (this._saveFailureNotified) return;
+    this._saveFailureNotified = true;
+    const name = isNoteFile(doc.entry.name) ? titleOf(doc.entry.name) : doc.entry.name;
+    notificationService.error(`Couldn't save \u201c${name}\u201d`, {
+      title: `Couldn't save \u201c${name}\u201d`,
+      message: `${error.message}. Your changes are kept as a draft; Notes tries again when you keep editing or select Retry.`,
+      source: "notes",
+      groupKey: `notes-save:${doc.entry.id}`,
+      action: { type: "open", path: doc.entry.path },
+    });
+  }
+
+  /**
+   * Task Manager asks before ending Notes while a document can't be saved.
+   * @returns {string|null}
+   */
+  getCloseWarning() {
+    if (!this._doc || !this._saveError || !this._dirty) return null;
+    const name = isNoteFile(this._doc.entry.name) ? titleOf(this._doc.entry.name) : this._doc.entry.name;
+    return `\u201c${name}\u201d has changes that couldn't be saved. They are kept as a draft and offered the next time it opens.`;
   }
 
   /** @returns {void} */

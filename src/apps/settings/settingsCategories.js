@@ -30,6 +30,8 @@ import DesktopPage from "./pages/desktopPage.js";
 import StartMenuPage from "./pages/startMenuPage.js";
 import FileExplorerPage from "./pages/fileExplorerPage.js";
 import KeyboardPage from "./pages/keyboardPage.js";
+import NotificationsPage from "./pages/notificationsPage.js";
+import TaskbarPage from "./pages/taskbarPage.js";
 import SystemPage from "./pages/systemPage.js";
 
 /**
@@ -48,7 +50,7 @@ import SystemPage from "./pages/systemPage.js";
  * @typedef {object} SettingsCategory
  * @property {string} id
  * @property {string} label
- * @property {string} icon - Glyph shown in the sidebar.
+ * @property {string} icon - Glyph or built-in "icon:<name>" shown in the sidebar.
  * @property {((context: SettingsPageContext) => SettingsPage)} [createPage] - Omitted for unavailable categories.
  */
 
@@ -59,6 +61,8 @@ export const SETTINGS_CATEGORIES = Object.freeze([
   { id: "desktop", label: "Desktop", icon: "\u25a6", createPage: (context) => new DesktopPage(context) },
   { id: "startMenu", label: "Start Menu", icon: "\u2630", createPage: (context) => new StartMenuPage(context) },
   { id: "fileExplorer", label: "File Explorer", icon: "\u25a4", createPage: (context) => new FileExplorerPage(context) },
+  { id: "notifications", label: "Notifications", icon: "icon:bell", createPage: (context) => new NotificationsPage(context) },
+  { id: "taskbar", label: "Taskbar", icon: "icon:display", createPage: (context) => new TaskbarPage(context) },
   { id: "keyboard", label: "Keyboard Shortcuts", icon: "\u2328", createPage: (context) => new KeyboardPage(context) },
   { id: "system", label: "System", icon: "\u24d8", createPage: () => new SystemPage() },
 ]);

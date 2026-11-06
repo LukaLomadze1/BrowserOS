@@ -105,6 +105,7 @@ class WindowManager {
    * @param {boolean} [config.maximizable=true]
    * @param {boolean} [config.closable=true]
    * @param {() => void} [config.onDestroy] - Called once, when the window is fully removed, so the app can clean up its own timers/listeners.
+   * @param {string} [config.appId] - Application the window belongs to; passed on in "window:created" so the taskbar can group and label it.
    * @returns {string} The window id.
    */
   createWindow(config) {
@@ -154,7 +155,7 @@ class WindowManager {
     view.playOpenAnimation();
     this._createdCount += 1;
 
-    eventBus.emit("window:created", { id: config.id, title: config.title });
+    eventBus.emit("window:created", { id: config.id, title: config.title, appId: config.appId ?? null, icon: config.icon ?? null });
     this.focusWindow(config.id);
 
     return config.id;
@@ -293,6 +294,8 @@ class WindowManager {
     const entry = this._windows.get(id);
     if (!entry) return;
     entry.view.setTitle(title);
+    entry.config = { ...entry.config, title };
+    eventBus.emit("window:titleChanged", { id, title });
   }
 
   /**

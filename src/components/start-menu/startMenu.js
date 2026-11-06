@@ -11,6 +11,7 @@
  */
 
 import { createElement, clearElement } from "../../utils/dom.js";
+import { createIconElement } from "../../utils/icons.js";
 
 class StartMenuView {
   /**
@@ -328,7 +329,7 @@ class StartMenuView {
       className: "start-menu__pinned-tile",
       attrs: { type: "button", "aria-label": app.name, "data-app-id": app.id },
       children: [
-        createElement("span", { className: "start-menu__pinned-icon", attrs: { "aria-hidden": "true" }, text: app.icon || "\u25a2" }),
+        createIconElement(app.icon, { className: "start-menu__pinned-icon" }),
         createElement("span", { className: "start-menu__pinned-label", text: app.name }),
       ],
       on: { click: () => onLaunch(app.id) },
@@ -351,7 +352,7 @@ class StartMenuView {
       className: "start-menu__row",
       attrs: { type: "button", "aria-label": app.name, "data-app-id": app.id },
       children: [
-        createElement("span", { className: "start-menu__row-icon", attrs: { "aria-hidden": "true" }, text: app.icon || "\u25a2" }),
+        createIconElement(app.icon, { className: "start-menu__row-icon" }),
         createElement("span", { className: "start-menu__row-text", children: textChildren }),
       ],
       on: { click: () => onLaunch(app.id) },
@@ -367,7 +368,7 @@ class StartMenuView {
       className: `start-menu__row start-menu__row--${result.kind}`,
       attrs: { type: "button", "aria-label": `${result.name}, ${result.detail}`, "data-result-key": result.key },
       children: [
-        createElement("span", { className: "start-menu__row-icon", attrs: { "aria-hidden": "true" }, text: result.icon || "\u25a2" }),
+        createIconElement(result.icon, { className: "start-menu__row-icon" }),
         createElement("span", {
           className: "start-menu__row-text",
           children: [

@@ -30,6 +30,10 @@ export default class TerminalApp extends Application {
       appManager: this.appManager,
       recentFilesService: this.recentFilesService,
       initialPath: options.path,
+      focusWindow: () => {
+        if (this.windowId) this.appManager.focusWindow(this.windowId);
+      },
+      isActive: () => Boolean(this.windowId) && this.appManager.getFocusedWindowId() === this.windowId,
     });
     this._manager.init();
 

@@ -8,13 +8,38 @@
  * listening or emitting.
  *
  * Naming convention for events: "<domain>:<action>", e.g.
- * "window:focus", "process:spawned", "theme:changed".
+ * "window:focused", "application:started", "settings:changed".
+ *
+ * A listener that throws is logged and skipped so the others still run;
+ * a handler set with `setListenerErrorHandler()` (the application
+ * monitor) also receives the error, so it can be attributed to the
+ * application that caused it.
  */
 
 class EventBus {
   constructor() {
     /** @type {Map<string, Set<Function>>} */
     this._listeners = new Map();
+    /** @type {((error: *, eventName: string) => void)|null} */
+    this._errorHandler = null;
+  }
+
+  /**
+   * @param {((error: *, eventName: string) => void)|null} handler - Receives errors thrown by listeners.
+   * @returns {void}
+   */
+  setListenerErrorHandler(handler) {
+    this._errorHandler = typeof handler === "function" ? handler : null;
+  }
+
+  /**
+   * @returns {number} Total subscriptions across all events (diagnostics: a
+   *   count that keeps growing as windows open and close points to a leak).
+   */
+  getListenerCount() {
+    let total = 0;
+    for (const set of this._listeners.values()) total += set.size;
+    return total;
   }
 
   /**
@@ -76,6 +101,11 @@ class EventBus {
         handler(payload);
       } catch (error) {
         console.error(`[EventBus] listener for "${eventName}" threw:`, error);
+        try {
+          this._errorHandler?.(error, eventName);
+        } catch {
+          /* the error handler itself must never break emission */
+        }
       }
     }
   }

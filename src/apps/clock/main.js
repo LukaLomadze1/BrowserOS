@@ -71,7 +71,7 @@ export default class ClockApp extends Application {
     return {
       element: this._root,
       title: "Clock",
-      icon: "\u23f0",
+      icon: "icon:clock",
       width: 560,
       height: 600,
       minWidth: 380,

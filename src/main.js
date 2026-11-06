@@ -87,6 +87,12 @@ import { clockService } from "./core/clock/clockService.js";
 import { notificationService } from "./core/notifications/notificationService.js";
 import { fileAssociations } from "./core/fileAssociations.js";
 import { seedSamplePictures } from "./core/vfs/sampleContent.js";
+import { openVfsEntry } from "./core/vfs/vfsOpener.js";
+import { serviceManager } from "./core/services/serviceManager.js";
+import { systemClock } from "./core/shell/systemClock.js";
+import { TrayManager } from "./core/shell/trayManager.js";
+import { appMonitor } from "./core/system/appMonitor.js";
+import { storageMonitor } from "./core/system/storageMonitor.js";
 
 /** App ids shown as desktop shortcuts; names and icons come from AppManager. */
 const DESKTOP_SHORTCUT_APPS = [
@@ -113,6 +119,7 @@ async function boot() {
 
   const appManager = new AppManager(windowManager);
   appManager.init();
+  desktop.attachAppManager(appManager);
 
   appManager.register({
     id: "about",
@@ -153,7 +160,7 @@ async function boot() {
   appManager.register({
     id: "clock",
     name: "Clock",
-    icon: "\u23f0",
+    icon: "icon:clock",
     description: "World clock, alarms, stopwatch, and timer",
     category: "Utilities",
     singleInstance: true,
@@ -204,16 +211,103 @@ async function boot() {
     singleInstance: true,
     loader: () => import("./apps/recycle-bin/main.js"),
   });
+  appManager.register({
+    id: "task-manager",
+    name: "Task Manager",
+    icon: "icon:activity",
+    description: "Running applications, performance, and background services",
+    category: "System",
+    singleInstance: true,
+    loader: () => import("./apps/task-manager/main.js"),
+  });
 
   await vfs.init();
 
-  // Services that must run whether or not their app windows are open.
+  // Data for services that run whether or not their app windows are open.
   calendarService.init({ vfs, appManager });
   clockService.init();
 
   const recentFilesService = new RecentFilesService(vfs);
   recentFilesService.init();
   appManager.setRecentFilesService(recentFilesService);
+
+  // Notifications name their source application and open what they
+  // refer to through the same paths as the rest of the shell.
+  notificationService.configure({
+    resolveSource: (source) => {
+      const app = appManager.getApp(source);
+      return app ? { name: app.name, icon: app.icon } : null;
+    },
+    performAction: async (action) => {
+      if (action.type === "launch") {
+        if (!appManager.isRegistered(action.appId)) return false;
+        await appManager.launch(action.appId, action.options ?? {});
+        return true;
+      }
+      if (action.type === "open") {
+        if (!(await vfs.exists(action.path))) return false;
+        await openVfsEntry(await vfs.getInfo(action.path), { appManager, recentFilesService });
+        return true;
+      }
+      return false;
+    },
+  });
+  appMonitor.configure({ appManager });
+
+  // Background services (see src/core/services/serviceManager.js).
+  serviceManager.register({
+    id: "notifications",
+    name: "Notifications",
+    description: "Notification banners, the Notification Center, and Do Not Disturb.",
+    essential: true,
+    start: () => notificationService.start(),
+    stop: () => notificationService.stop(),
+    getDetails: () => notificationService.getDetails(),
+  });
+  serviceManager.register({
+    id: "system-clock",
+    name: "System clock",
+    description: "Keeps the taskbar clock and date panel up to date.",
+    start: () => systemClock.start(),
+    stop: () => systemClock.stop(),
+    getDetails: () => systemClock.getDetails(),
+  });
+  serviceManager.register({
+    id: "calendar-reminders",
+    name: "Calendar reminders",
+    description: "Shows reminders for upcoming Calendar events.",
+    dependencies: ["notifications"],
+    start: () => calendarService.startReminders(),
+    stop: () => calendarService.stopReminders(),
+    getDetails: () => calendarService.getReminderDetails(),
+  });
+  serviceManager.register({
+    id: "clock-alarms",
+    name: "Alarms and timer",
+    description: "Rings Clock alarms and announces when the timer finishes.",
+    dependencies: ["notifications"],
+    start: () => clockService.startScheduler(),
+    stop: () => clockService.stopScheduler(),
+    getDetails: () => clockService.getSchedulerDetails(),
+  });
+  serviceManager.register({
+    id: "app-monitor",
+    name: "Application monitor",
+    description: "Reports application errors and measures how responsive BrowserOS is.",
+    dependencies: ["notifications"],
+    start: () => appMonitor.start(),
+    stop: () => appMonitor.stop(),
+    getDetails: () => appMonitor.getDetails(),
+  });
+  serviceManager.register({
+    id: "storage-monitor",
+    name: "Storage monitor",
+    description: "Warns when BrowserOS can't save data or browser storage is nearly full.",
+    dependencies: ["notifications"],
+    start: () => storageMonitor.start(),
+    stop: () => storageMonitor.stop(),
+    getDetails: () => storageMonitor.getDetails(),
+  });
 
   const desktopManager = new DesktopManager({
     container: desktop.getIconLayer(),
@@ -236,6 +330,9 @@ async function boot() {
   });
   startMenuManager.init();
 
+  const trayManager = new TrayManager({ trayEl: desktop.getTrayElement(), appManager, calendarService });
+  trayManager.init();
+
   // Application shortcuts (gated by keyboard.appShortcuts). Launch
   // errors are logged rather than thrown into the key handler.
   const launchFromShortcut = (appId, options) => {
@@ -246,6 +343,7 @@ async function boot() {
   keyboardShortcuts.bind("general.openTerminal", () => launchFromShortcut("terminal"));
   keyboardShortcuts.bind("general.openExplorer", () => launchFromShortcut("file-explorer"));
   keyboardShortcuts.bind("general.openSettings", () => launchFromShortcut("settings"));
+  keyboardShortcuts.bind("general.openTaskManager", () => launchFromShortcut("task-manager"));
 
   // Core services exposed on window for inspection and scripting from
   // the browser's developer console.
@@ -257,6 +355,11 @@ async function boot() {
   window.fileAssociations = fileAssociations;
   window.calendarService = calendarService;
   window.clockService = clockService;
+  window.serviceManager = serviceManager;
+  window.trayManager = trayManager;
+  window.appMonitor = appMonitor;
+
+  await serviceManager.startAll();
 
   // First-run sample images, created in the background.
   seedSamplePictures(vfs);

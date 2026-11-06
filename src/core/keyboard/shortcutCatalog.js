@@ -43,6 +43,7 @@
 /** Display order and labels of the shortcut groups. */
 export const SHORTCUT_CATEGORIES = Object.freeze([
   Object.freeze({ id: "general", label: "General" }),
+  Object.freeze({ id: "shell", label: "System Tray" }),
   Object.freeze({ id: "desktop", label: "Desktop" }),
   Object.freeze({ id: "window", label: "Window Management" }),
   Object.freeze({ id: "fileExplorer", label: "File Explorer" }),
@@ -122,10 +123,50 @@ export const SHORTCUT_DEFINITIONS = deepFreeze([
     allowInEditable: true,
   },
   {
+    id: "general.openTaskManager",
+    category: "general",
+    description: "Open Task Manager",
+    context: "Anywhere",
+    combos: [{ key: "Escape", ctrl: true, alt: true }],
+    scope: "global",
+    settingKey: "keyboard.appShortcuts",
+    allowInEditable: true,
+  },
+  {
     id: "general.cancel",
     category: "general",
     description: "Close the open menu or dialog, or cancel an inline rename",
     context: "Menus, dialogs, rename fields",
+    combos: [{ key: "Escape" }],
+    scope: "local",
+  },
+
+  // ---- System tray ----
+  {
+    id: "shell.notificationCenter",
+    category: "shell",
+    description: "Open or close the Notification Center",
+    context: "Anywhere",
+    combos: [{ key: "n", alt: true, shift: true }],
+    scope: "global",
+    settingKey: "keyboard.appShortcuts",
+    allowInEditable: true,
+  },
+  {
+    id: "shell.quickSettings",
+    category: "shell",
+    description: "Open or close Quick Settings",
+    context: "Anywhere",
+    combos: [{ key: "a", alt: true, shift: true }],
+    scope: "global",
+    settingKey: "keyboard.appShortcuts",
+    allowInEditable: true,
+  },
+  {
+    id: "shell.closePanel",
+    category: "shell",
+    description: "Close the open tray panel",
+    context: "Tray panel open",
     combos: [{ key: "Escape" }],
     scope: "local",
   },

@@ -47,6 +47,7 @@
  */
 
 import { eventBus } from "../../core/eventBus.js";
+import { notificationService } from "../../core/notifications/notificationService.js";
 import { storage } from "../../core/storage.js";
 import { settingsService } from "../../core/settings/settingsService.js";
 import { keyboardShortcuts } from "../../core/keyboard/keyboardShortcuts.js";
@@ -975,6 +976,8 @@ class ExplorerManager {
       return;
     }
     let result;
+    const startedAt = Date.now();
+    const folderPath = this._path;
     try {
       result = await importHostFiles(this._vfs, this._path, files);
     } catch (error) {
@@ -982,6 +985,9 @@ class ExplorerManager {
       return;
     }
     const { imported, skipped } = result;
+    if (isLargeOperation(imported.length, startedAt)) {
+      notifyOperation({ type: "success", title: `Imported ${plural(imported.length, "file")}`, folderPath });
+    }
     if (imported.length > 0) {
       this._selection = new Set(imported.map((entry) => entry.id));
       this._applySelectionToRows();
@@ -1143,12 +1149,28 @@ class ExplorerManager {
       if (!confirmed) return;
     }
 
+    const startedAt = Date.now();
+    const folderPath = this._path;
+    const failures = [];
     for (const entry of entries) {
       try {
         await this._vfs.delete(entry.path);
       } catch (error) {
-        await this._showErrorDialog(`Couldn't delete "${entry.name}"`, error.message);
+        failures.push({ name: entry.name, message: error.message });
       }
+    }
+    const moved = entries.length - failures.length;
+    if (failures.length === 1 && entries.length === 1) {
+      await this._showErrorDialog(`Couldn't delete "${failures[0].name}"`, failures[0].message);
+    } else if (failures.length > 0) {
+      notifyOperation({
+        type: "error",
+        title: `${plural(failures.length, "item")} couldn't be moved to Trash`,
+        message: failures.slice(0, 3).map((failure) => `${failure.name}: ${failure.message}`).join(" \u00b7 "),
+        folderPath,
+      });
+    } else if (isLargeOperation(moved, startedAt)) {
+      notifyOperation({ type: "success", title: `Moved ${plural(moved, "item")} to Trash`, folderPath: "/Trash" });
     }
   }
 
@@ -1191,12 +1213,19 @@ class ExplorerManager {
     if (this._path === HOME_PATH || this._path === FAVORITES_PATH) return;
     if (!this._clipboardService.hasContent()) return;
 
-    const { errors } = await pasteClipboard(this._vfs, this._clipboardService, this._path);
+    const operation = this._clipboardService.get()?.operation === "cut" ? "Moved" : "Copied";
+    const startedAt = Date.now();
+    const folderPath = this._path;
+    const { pasted, errors } = await pasteClipboard(this._vfs, this._clipboardService, this._path);
     if (errors.length > 0) {
-      await this._showErrorDialog(
-        "Some items couldn't be pasted",
-        errors.map((error) => `${error.path}: ${error.message}`).join("\n")
-      );
+      notifyOperation({
+        type: "error",
+        title: `${plural(errors.length, "item")} couldn't be ${operation === "Moved" ? "moved" : "copied"}`,
+        message: errors.slice(0, 3).map((error) => `${error.path}: ${error.message}`).join(" \u00b7 "),
+        folderPath,
+      });
+    } else if (isLargeOperation(pasted.length, startedAt)) {
+      notifyOperation({ type: "success", title: `${operation} ${plural(pasted.length, "item")}`, folderPath });
     }
   }
 
@@ -1561,3 +1590,46 @@ class ExplorerManager {
 }
 
 export { ExplorerManager, HOME_PATH, FAVORITES_PATH };
+
+// ---------------------------------------------------------------
+// Operation notifications
+// ---------------------------------------------------------------
+
+/** Item count from which an operation is worth a completion notification. */
+const LARGE_OPERATION_ITEMS = 10;
+/** Duration from which an operation is worth a completion notification. */
+const LARGE_OPERATION_MS = 3000;
+
+/**
+ * Routine single-file actions don't notify; bulk or slow ones do.
+ * @param {number} count
+ * @param {number} startedAt
+ * @returns {boolean}
+ */
+function isLargeOperation(count, startedAt) {
+  return count > 0 && (count >= LARGE_OPERATION_ITEMS || Date.now() - startedAt >= LARGE_OPERATION_MS);
+}
+
+/**
+ * @param {{type: "success"|"error", title: string, message?: string, folderPath: string}} details
+ * @returns {void}
+ */
+function notifyOperation({ type, title, message = "", folderPath }) {
+  notificationService.notify({
+    type,
+    title,
+    message: message || `In ${folderPath}`,
+    source: "file-explorer",
+    groupKey: `explorer:${type}`,
+    action: { type: "open", path: folderPath },
+  });
+}
+
+/**
+ * @param {number} count
+ * @param {string} noun
+ * @returns {string}
+ */
+function plural(count, noun) {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}

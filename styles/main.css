@@ -69,3 +69,15 @@ button:focus-visible,
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Built-in line icons (src/utils/icons.js). Sized in em so they scale
+ * with whatever glyph styles their container sets, and drawn with
+ * currentColor so they follow theme and accent like text glyphs. */
+.os-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  vertical-align: -0.14em;
+  overflow: visible;
+}

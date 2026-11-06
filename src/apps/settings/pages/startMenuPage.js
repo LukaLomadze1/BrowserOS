@@ -11,6 +11,7 @@
  */
 
 import { createElement, clearElement } from "../../../utils/dom.js";
+import { createIconElement } from "../../../utils/icons.js";
 import { eventBus } from "../../../core/eventBus.js";
 import { settingsService } from "../../../core/settings/settingsService.js";
 import { showConfirmDialog } from "../../../components/dialog/confirmDialog.js";
@@ -232,7 +233,7 @@ export default class StartMenuPage extends SettingsPage {
     return createElement("li", {
       className: "settings-app-list__item",
       children: [
-        createElement("span", { className: "settings-app-list__icon", attrs: { "aria-hidden": "true" }, text: app.icon || "\u25a2" }),
+        createIconElement(app.icon, { className: "settings-app-list__icon" }),
         createElement("span", { className: "settings-app-list__name", text: app.name }),
         createElement("span", {
           className: "settings-app-list__actions",

@@ -15,6 +15,9 @@
  *   startMenu     Sections, recent items, pinned apps, search (StartMenuManager).
  *   fileExplorer  View, display, sorting, startup, navigation (ExplorerManager).
  *   keyboard      Which global shortcut groups are active (keyboardShortcuts).
+ *   notifications Do Not Disturb, toast duration, previews, sounds, history (NotificationService).
+ *   taskbar       Tray clock and date display (TrayManager).
+ *   taskManager   Task Manager refresh rate.
  *
  * Descriptor fields:
  *
@@ -490,7 +493,95 @@ export const SETTINGS_SCHEMA = freezeSchema({
     type: "boolean",
     defaultValue: true,
     persist: true,
-    description: "Enable shortcuts that open Terminal, File Explorer, and Settings.",
+    description: "Enable shortcuts that open Terminal, File Explorer, Settings, Task Manager, and the tray panels.",
+  },
+
+  // ---------------------------------------------------------------
+  // Notifications
+  // ---------------------------------------------------------------
+  "notifications.doNotDisturb": {
+    category: "notifications",
+    type: "boolean",
+    defaultValue: false,
+    persist: true,
+    description: "Hide notification banners and mute their sounds; alarms and critical warnings still appear.",
+  },
+  "notifications.duration": {
+    category: "notifications",
+    type: "number",
+    defaultValue: 8,
+    min: 3,
+    max: 30,
+    integer: true,
+    persist: true,
+    description: "Seconds a banner stays on screen when a notification doesn't set its own duration.",
+  },
+  "notifications.showPreviews": {
+    category: "notifications",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Show the message text in banners (the Notification Center always shows it).",
+  },
+  "notifications.sounds": {
+    category: "notifications",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Play notification sounds. Alarm sounds are controlled per alarm in Clock.",
+  },
+  "notifications.historyLimit": {
+    category: "notifications",
+    type: "number",
+    defaultValue: 50,
+    allowedValues: [20, 50, 100, 200],
+    persist: true,
+    description: "Maximum number of notifications kept in the Notification Center.",
+  },
+
+  // ---------------------------------------------------------------
+  // Taskbar
+  // ---------------------------------------------------------------
+  "taskbar.showClock": {
+    category: "taskbar",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Show the time in the taskbar tray.",
+  },
+  "taskbar.showDate": {
+    category: "taskbar",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Show the date under the time in the taskbar tray.",
+  },
+  "taskbar.clockFormat": {
+    category: "taskbar",
+    type: "string",
+    defaultValue: "auto",
+    allowedValues: ["auto", "12h", "24h"],
+    persist: true,
+    description: "Taskbar and date panel clock format; auto follows the browser's locale.",
+  },
+  "taskbar.showSeconds": {
+    category: "taskbar",
+    type: "boolean",
+    defaultValue: false,
+    persist: true,
+    description: "Show seconds in the taskbar clock.",
+  },
+
+  // ---------------------------------------------------------------
+  // Task Manager
+  // ---------------------------------------------------------------
+  "taskManager.refreshInterval": {
+    category: "taskManager",
+    type: "number",
+    defaultValue: 2,
+    allowedValues: [1, 2, 5, 10],
+    persist: true,
+    description: "Seconds between Task Manager measurements (performance figures and running times).",
   },
 });
 

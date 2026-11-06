@@ -19,6 +19,7 @@
  */
 
 import { createElement } from "../../utils/dom.js";
+import { renderIcon } from "../../utils/icons.js";
 
 const DRAG_THRESHOLD_PX = 4;
 
@@ -248,11 +249,10 @@ class DesktopIconView {
 
   /** @returns {void} */
   _buildDom() {
-    this._glyphEl = createElement("div", {
-      className: "desktop-icon__glyph",
-      attrs: { "aria-hidden": "true" },
-      text: this._config.icon,
-    });
+    this._glyphEl = renderIcon(
+      createElement("div", { className: "desktop-icon__glyph", attrs: { "aria-hidden": "true" } }),
+      this._config.icon
+    );
     this._labelEl = createElement("div", { className: "desktop-icon__label", text: this._config.label });
 
     this._el = createElement("div", {

@@ -2,12 +2,16 @@
  * @file Key/value persistence for small system state (theme choice,
  * preferences, window positions, etc).
  *
- * This is intentionally scoped to localStorage. The virtual file
- * system (folders, files, byte content) is a much larger subsystem
- * backed by IndexedDB and will be introduced as its own module in
- * the File System step — it does not belong here, and stubbing it
- * out now would only produce dead API surface.
+ * This is intentionally scoped to localStorage. Files and folders live
+ * in the virtual file system (src/core/vfs/), which is backed by
+ * IndexedDB.
+ *
+ * A failed write (for example, storage full or blocked) is logged and
+ * announced as "storage:writeFailed" { key, message } so the storage
+ * monitor can warn the user.
  */
+
+import { eventBus } from "./eventBus.js";
 
 const NAMESPACE = "browseros";
 
@@ -58,6 +62,7 @@ class StorageService {
       return true;
     } catch (error) {
       console.error(`[Storage] failed to write "${key}":`, error);
+      eventBus.emit("storage:writeFailed", Object.freeze({ key, message: error?.message || String(error) }));
       return false;
     }
   }

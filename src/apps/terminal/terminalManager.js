@@ -14,6 +14,7 @@
  */
 
 import { eventBus } from "../../core/eventBus.js";
+import { notificationService } from "../../core/notifications/notificationService.js";
 import { storage } from "../../core/storage.js";
 import { openVfsEntry } from "../../core/vfs/vfsOpener.js";
 import { keyboardShortcuts } from "../../core/keyboard/keyboardShortcuts.js";
@@ -22,6 +23,8 @@ import { tokenize, createCommandRegistry } from "./commands.js";
 
 const HISTORY_STORAGE_KEY = "terminal:history";
 const MAX_HISTORY = 500;
+/** Commands running at least this long notify when they finish in the background. */
+const LONG_COMMAND_MS = 5000;
 
 class TerminalManager {
   /**
@@ -30,12 +33,19 @@ class TerminalManager {
    * @param {import("../../core/appManager.js").AppManager} config.appManager
    * @param {import("../../core/recentFilesService.js").RecentFilesService} config.recentFilesService
    * @param {string} [config.initialPath] - Starting directory, if launched with one. Defaults to "/".
+   * @param {() => void} [config.focusWindow] - Bring this Terminal's window forward (used by its notifications).
+   * @param {() => boolean} [config.isActive] - Whether this Terminal's window is the active window.
    */
   constructor(config) {
     this._vfs = config.vfs;
     this._appManager = config.appManager;
     this._recentFilesService = config.recentFilesService;
     this._cwd = config.initialPath ?? "/";
+    this._focusWindow = config.focusWindow ?? null;
+    this._isActive = config.isActive ?? null;
+    /** @type {Set<AbortController>} Commands still running (Ctrl + C interrupts them). */
+    this._runningCommands = new Set();
+    this._destroyed = false;
 
     this._commands = createCommandRegistry();
 
@@ -77,14 +87,18 @@ class TerminalManager {
   onBlur() {}
 
   /**
-   * No document/window-level listeners are registered anywhere in
-   * this class — every listener lives on this window's own input
-   * element, so closing the window (which removes that element from
-   * the DOM) is enough for it to become garbage, with nothing here
-   * needing to explicitly unsubscribe.
+   * Interrupt commands still running in this window. No document- or
+   * window-level listeners are registered anywhere in this class —
+   * every listener lives on this window's own input element, so
+   * removing the window from the DOM releases them.
    * @returns {void}
    */
-  destroy() {}
+  destroy() {
+    this._destroyed = true;
+    // Closing the window interrupts anything still running in it.
+    for (const controller of this._runningCommands) controller.abort();
+    this._runningCommands.clear();
+  }
 
   // ---------------------------------------------------------------
   // Input handling
@@ -167,6 +181,8 @@ class TerminalManager {
 
   /** @returns {void} */
   _cancelCurrentLine() {
+    // Ctrl + C also interrupts commands that are still running.
+    for (const controller of this._runningCommands) controller.abort();
     const current = this._view.getInputValue();
     this._view.appendLine({ text: `${this._formatPrompt()} ${current}^C`, type: "input" });
     this._view.setInputValue("");
@@ -265,14 +281,47 @@ class TerminalManager {
       return;
     }
 
+    const controller = new AbortController();
+    this._runningCommands.add(controller);
+    const startedAt = Date.now();
+    let failure = null;
     try {
-      await command.run(args, this._buildContext());
+      await command.run(args, { ...this._buildContext(), signal: controller.signal });
       eventBus.emit("terminal:command", { command: name, args });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this._view.appendLine({ text: message, type: "error" });
-      eventBus.emit("terminal:error", { command: name, message });
+      failure = error instanceof Error ? error.message : String(error);
+      this._view.appendLine({ text: failure, type: "error" });
+      eventBus.emit("terminal:error", { command: name, message: failure });
+    } finally {
+      this._runningCommands.delete(controller);
     }
+    if (!this._destroyed && !controller.signal.aborted) this._notifyIfLongRunning(line, Date.now() - startedAt, failure);
+  }
+
+  /**
+   * A command that ran for a while and finished while the Terminal was
+   * in the background produces a notification; quick commands, and
+   * commands finishing while the Terminal is in front, don't.
+   * @param {string} line
+   * @param {number} durationMs
+   * @param {string|null} failure
+   * @returns {void}
+   */
+  _notifyIfLongRunning(line, durationMs, failure) {
+    if (durationMs < LONG_COMMAND_MS) return;
+    const inFront = this._isActive ? this._isActive() : this._view.getElement().contains(document.activeElement);
+    const focused = document.visibilityState === "visible" && inFront;
+    if (focused) return;
+    const seconds = Math.round(durationMs / 1000);
+    notificationService.notify({
+      type: failure ? "error" : "success",
+      title: failure ? "A Terminal command failed" : "A Terminal command finished",
+      message: failure ? `${line} \u2014 ${failure}` : `${line} \u00b7 ${seconds} s`,
+      source: "terminal",
+      groupKey: "terminal-commands",
+      action: { type: "launch", appId: "terminal" },
+      onClick: this._focusWindow ? () => this._focusWindow() : undefined,
+    });
   }
 
   /**

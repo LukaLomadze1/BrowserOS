@@ -1,16 +1,19 @@
 /**
- * Notification stack (NotificationView). Sits above windows and the
- * taskbar, bottom-right, and uses the same glass, accent, radius, and
- * motion tokens as every other system panel.
+ * Notification banners (NotificationView). Sit above windows and the
+ * taskbar, bottom-right, and use the same glass, accent, radius, and
+ * motion tokens as every other system panel. The type (info, success,
+ * warning, error) colors the icon tile; alarms get an accent outline.
  */
 
 .notification-stack {
   position: fixed;
-  right: var(--space-4);
+  /* --shell-panel-inset: width taken by an open tray panel (TrayManager). */
+  right: calc(var(--space-4) + var(--shell-panel-inset, 0px));
   bottom: calc(var(--taskbar-height) + var(--space-3));
   z-index: 150;
   width: min(360px, calc(100vw - var(--space-6)));
   pointer-events: none;
+  transition: right var(--duration-normal) var(--ease-standard);
 }
 
 .notification-stack__list {
@@ -20,10 +23,10 @@
 }
 
 .notification {
+  --notification-tone: var(--color-accent-primary);
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  flex-direction: column;
   border-radius: var(--panel-radius);
   background: var(--color-taskbar-bg);
   border: 1px solid var(--color-surface-glass-border);
@@ -35,6 +38,18 @@
   transform: translateX(16px);
   transition: opacity var(--duration-normal) var(--ease-standard),
               transform var(--duration-normal) var(--ease-standard);
+}
+
+.notification--success {
+  --notification-tone: var(--color-success);
+}
+
+.notification--warning {
+  --notification-tone: var(--color-warning);
+}
+
+.notification--error {
+  --notification-tone: var(--color-danger);
 }
 
 .notification--visible {
@@ -52,6 +67,26 @@
   box-shadow: var(--shadow-window), 0 0 0 1px var(--color-accent-primary);
 }
 
+.notification__main {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) calc(var(--space-3) + 28px) var(--space-3) var(--space-4);
+  border-radius: var(--panel-radius);
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification__main:hover {
+  background: color-mix(in srgb, var(--color-surface-glass-strong) 60%, transparent);
+}
+
+.notification__main:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: -2px;
+}
+
 .notification__icon {
   flex-shrink: 0;
   width: 32px;
@@ -60,14 +95,28 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--notification-tone) 18%, transparent);
+  color: var(--notification-tone);
+  font-size: 18px;
+}
+
+.notification--info .notification__icon,
+.notification--alarm .notification__icon {
   background: var(--color-accent-gradient);
   color: var(--color-text-on-accent);
-  font-size: var(--text-md);
 }
 
 .notification__content {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.notification__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
 }
 
 .notification__title {
@@ -91,7 +140,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3) calc(var(--space-4) + 32px + var(--space-3));
 }
 
 .notification__action {
@@ -121,11 +170,16 @@
 }
 
 .notification__close {
-  flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
+  font-size: 14px;
   color: var(--color-text-tertiary);
 }
 

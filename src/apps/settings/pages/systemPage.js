@@ -22,6 +22,9 @@ const CATEGORY_LABELS = Object.freeze({
   startMenu: "Start Menu",
   fileExplorer: "File Explorer",
   keyboard: "Keyboard Shortcuts",
+  notifications: "Notifications",
+  taskbar: "Taskbar",
+  taskManager: "Task Manager",
 });
 
 export default class SystemPage {
@@ -150,7 +153,7 @@ export default class SystemPage {
     const confirmed = await showConfirmDialog({
       title: "Reset all preferences?",
       message:
-        "Every BrowserOS preference \u2014 appearance, wallpaper, desktop, Start Menu, File Explorer, and keyboard \u2014 returns to its default. Files, desktop icon positions, and recent history are kept.",
+        "Every BrowserOS preference \u2014 appearance, wallpaper, desktop, Start Menu, File Explorer, keyboard, notifications, taskbar, and Task Manager \u2014 returns to its default. Files, desktop icon positions, and recent history are kept.",
       confirmLabel: "Reset all",
       destructive: true,
     });

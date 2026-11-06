@@ -176,9 +176,9 @@ export class SettingsPage {
       labelledBy: ids.labelId,
       describedBy: ids.descriptionId,
       options,
-      onChange: (value) => settingsService.set(key, value),
+      onChange: (value) => settingsService.set(key, coerceToSchemaType(key, value)),
     });
-    this.addSyncer((values) => control.setValue(values[key]));
+    this.addSyncer((values) => control.setValue(String(values[key])));
     return this._row(key, label, description, ids, control.element, "inline");
   }
 
@@ -196,9 +196,9 @@ export class SettingsPage {
       labelledBy: ids.labelId,
       describedBy: ids.descriptionId,
       options,
-      onChange: (value) => settingsService.set(key, value),
+      onChange: (value) => settingsService.set(key, coerceToSchemaType(key, value)),
     });
-    this.addSyncer((values) => control.setValue(values[key]));
+    this.addSyncer((values) => control.setValue(String(values[key])));
     return this._row(key, label, description, ids, control.element, "inline");
   }
 
@@ -294,4 +294,16 @@ export class SettingsPage {
  */
 function rowName(key) {
   return key.replace(/\./g, "-");
+}
+
+/**
+ * Form controls report string values; numeric settings (e.g. a history
+ * limit offered as a list of choices) are converted back to numbers so
+ * they pass schema validation.
+ * @param {string} key
+ * @param {string} value
+ * @returns {string|number}
+ */
+function coerceToSchemaType(key, value) {
+  return settingsService.getDescriptor(key)?.type === "number" ? Number(value) : value;
 }

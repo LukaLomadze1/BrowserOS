@@ -2,10 +2,14 @@
  * @file ClockService — alarms, the countdown timer, the stopwatch, and
  * the world-clock list.
  *
- * It runs from boot, independently of the Clock window, so alarms and
- * the timer fire while BrowserOS is open even when Clock is closed, and
- * a running stopwatch or timer survives closing the window or
- * reloading BrowserOS.
+ * State loads at boot (`init()`), independently of the Clock window.
+ * Scheduling runs as the "clock-alarms" background service
+ * (`startScheduler()` / `stopScheduler()`, called by ServiceManager), so
+ * alarms and the timer fire while BrowserOS is open even when Clock is
+ * closed, and a running stopwatch or timer survives closing the window
+ * or reloading BrowserOS. While the scheduler is stopped nothing rings;
+ * an alarm or timer that came due meanwhile is handled when it starts
+ * again.
  *
  * Accuracy: nothing here counts ticks. The timer stores the wall-clock
  * time it ends (`endAt`) and the stopwatch the time it started plus the
@@ -72,6 +76,8 @@ class ClockService {
     this._worldClocks = [];
     this._timeoutId = null;
     this._initialized = false;
+    this._schedulerRunning = false;
+    this._missedReported = false;
     this._activeAlerts = new Map();
     this._visibilityHandler = () => {
       if (document.visibilityState === "visible") this._check();
@@ -79,16 +85,50 @@ class ClockService {
   }
 
   /**
-   * Load saved state, report anything missed while closed, and start scheduling. Call once during boot.
+   * Load saved state. Call once during boot; scheduling starts with `startScheduler()`.
    * @returns {void}
    */
   init() {
     if (this._initialized) return;
     this._initialized = true;
     this._load();
-    this._reportMissed();
+  }
+
+  /**
+   * Start ringing alarms and completing the timer (the "clock-alarms"
+   * service). The first start also reports what was missed while
+   * BrowserOS was closed.
+   * @returns {void}
+   */
+  startScheduler() {
+    this.init();
+    if (this._schedulerRunning) return;
+    this._schedulerRunning = true;
+    if (!this._missedReported) {
+      this._missedReported = true;
+      this._reportMissed();
+    }
     document.addEventListener("visibilitychange", this._visibilityHandler);
-    this._schedule();
+    this._check();
+  }
+
+  /**
+   * Stop scheduling. Ringing alerts stay until dismissed.
+   * @returns {void}
+   */
+  stopScheduler() {
+    if (!this._schedulerRunning) return;
+    this._schedulerRunning = false;
+    window.clearTimeout(this._timeoutId);
+    this._timeoutId = null;
+    document.removeEventListener("visibilitychange", this._visibilityHandler);
+  }
+
+  /** @returns {{summary: string, timers: number}} Status for Task Manager. */
+  getSchedulerDetails() {
+    const enabled = this._alarms.filter((alarm) => alarm.enabled).length;
+    const timer = this._timer.status === "running" ? `timer ends ${new Date(this._timer.endAt).toLocaleTimeString()}` : `timer ${this._timer.status}`;
+    return { summary: `${enabled} alarm${enabled === 1 ? "" : "s"} on \u00b7 ${timer}`, timers: this._timeoutId !== null ? 1 : 0 };
   }
 
   // ---------------------------------------------------------------
@@ -290,6 +330,7 @@ class ClockService {
 
   /** @returns {void} */
   _schedule() {
+    if (!this._schedulerRunning) return;
     window.clearTimeout(this._timeoutId);
     const now = Date.now();
     const candidates = this._alarms.map((alarm) => this.nextTrigger(alarm, now)).filter((at) => at !== null);
@@ -301,6 +342,7 @@ class ClockService {
 
   /** @returns {void} */
   _check() {
+    if (!this._schedulerRunning) return;
     const now = Date.now();
     let alarmsChanged = false;
 
@@ -336,10 +378,11 @@ class ClockService {
     this._activeAlerts.get(alarm.id)?.dismiss();
     const handle = notificationService.notify({
       title: alarm.label || "Alarm",
-      body: formatAlarmTime(alarm.time),
-      icon: "\u23f0",
+      message: formatAlarmTime(alarm.time),
+      icon: "icon:clock",
       source: "clock",
       urgency: "alarm",
+      action: { type: "launch", appId: "clock", options: { tab: "alarms" } },
       sound: alarm.sound === "none" ? null : alarm.sound,
       loopSound: true,
       actions: [
@@ -366,9 +409,10 @@ class ClockService {
     this._activeAlerts.get("timer")?.dismiss();
     const handle = notificationService.notify({
       title: late ? "Timer finished while BrowserOS was closed" : "Timer finished",
-      body: `${formatDuration(durationMs)} timer`,
-      icon: "\u29d7",
+      message: `${formatDuration(durationMs)} timer`,
+      icon: "icon:stopwatch",
       source: "clock",
+      action: { type: "launch", appId: "clock", options: { tab: "timer" } },
       urgency: late ? "normal" : "alarm",
       sound: late ? null : "digital",
       loopSound: !late,
@@ -401,10 +445,12 @@ class ClockService {
         changed = true;
         notificationService.notify({
           title: `Missed alarm: ${alarm.label || "Alarm"}`,
-          body: `${formatAlarmTime(alarm.time)} \u2014 BrowserOS wasn't running`,
-          icon: "\u23f0",
+          message: `${formatAlarmTime(alarm.time)} \u2014 BrowserOS wasn't running`,
+          icon: "icon:clock",
+          type: "warning",
           source: "clock",
-          timeout: 20000,
+          duration: 20000,
+          action: { type: "launch", appId: "clock", options: { tab: "alarms" } },
         });
       }
     }

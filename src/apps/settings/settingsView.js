@@ -11,6 +11,7 @@
  */
 
 import { createElement, clearElement } from "../../utils/dom.js";
+import { createIconElement } from "../../utils/icons.js";
 import { isCategoryAvailable } from "./settingsCategories.js";
 
 /** How long a section stays highlighted after a deep link reveals it. */
@@ -252,7 +253,7 @@ class SettingsView {
   _buildNavButton(category) {
     const available = isCategoryAvailable(category);
     const children = [
-      createElement("span", { className: "settings-nav__icon", attrs: { "aria-hidden": "true" }, text: category.icon }),
+      createIconElement(category.icon, { className: "settings-nav__icon" }),
       createElement("span", { className: "settings-nav__label", text: category.label }),
     ];
     if (!available) {

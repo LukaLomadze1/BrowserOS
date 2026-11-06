@@ -14,6 +14,7 @@
  */
 
 import { createElement } from "../../utils/dom.js";
+import { renderIcon } from "../../utils/icons.js";
 import { getMotionDuration } from "../../utils/motion.js";
 
 /** Extra time allowed past the exit transition before the window is removed regardless. */
@@ -30,7 +31,7 @@ export class WindowView {
    * @param {object} config
    * @param {string} config.id
    * @param {string} config.title
-   * @param {string} [config.icon] - Single character/emoji glyph shown in the titlebar.
+   * @param {string} [config.icon] - Glyph or built-in "icon:<name>" shown in the titlebar (see utils/icons.js).
    * @param {HTMLElement} config.content - App content to mount in the window body.
    * @param {number} config.x
    * @param {number} config.y
@@ -229,11 +230,7 @@ export class WindowView {
 
     this._titleEl = createElement("span", { className: "window__title", text: title });
 
-    const iconEl = createElement("span", {
-      className: "window__icon",
-      attrs: { "aria-hidden": "true" },
-      text: icon || "\u25a2",
-    });
+    const iconEl = renderIcon(createElement("span", { className: "window__icon", attrs: { "aria-hidden": "true" } }), icon);
 
     const controls = [];
     if (minimizable) {

@@ -99,6 +99,8 @@ class StartMenuManager {
 
     this._unsubscribers.push(
       eventBus.on("startmenu:toggle", () => this.toggle()),
+      // Tray panels ask the menu to close without taking focus back.
+      eventBus.on("startmenu:close", (payload) => this.close({ restoreFocus: payload?.restoreFocus !== false })),
       eventBus.on("startmenu:clearRecentApps", () => this.clearRecentApps()),
       eventBus.on("app:launched", ({ appId }) => {
         // Dynamically-registered per-path windows (notes:<path>,
@@ -145,13 +147,16 @@ class StartMenuManager {
     this._recentFilesService.reconcile().then(() => this._renderRecentFiles());
   }
 
-  /** @returns {void} */
-  close() {
+  /**
+   * @param {{restoreFocus?: boolean}} [options] - Return focus to the Start button (default true).
+   * @returns {void}
+   */
+  close({ restoreFocus = true } = {}) {
     if (!this._view.isOpen()) return;
     this._cancelPendingSearch();
     this._view.close();
     this._startButtonEl.setAttribute("aria-expanded", "false");
-    this._startButtonEl.focus();
+    if (restoreFocus) this._startButtonEl.focus();
     eventBus.emit("startmenu:closed", {});
   }
 

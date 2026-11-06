@@ -15,6 +15,11 @@
  * automatically. Writes are serialized through a queue so overlapping
  * edits can't interleave.
  *
+ * Reminders run as the "calendar-reminders" background service:
+ * `startReminders()` / `stopReminders()` are called by ServiceManager.
+ * Events load at boot regardless, so Calendar works while reminders
+ * are stopped.
+ *
  * Reminders: an event may carry `reminder` = minutes before start.
  * The next due reminder is scheduled with a timer that re-checks at
  * least once a minute and whenever the page becomes visible again, so
@@ -66,13 +71,16 @@ class CalendarService {
     this._timerId = null;
     this._lastCheck = Date.now();
     this._loadError = null;
+    this._remindersRunning = false;
+    this._nextReminderAt = null;
     this._visibilityHandler = () => {
       if (document.visibilityState === "visible") this._checkReminders();
     };
   }
 
   /**
-   * Load events and start reminders. Call once during boot, after the VFS is ready.
+   * Load events. Call once during boot, after the VFS is ready.
+   * Reminders start separately with `startReminders()`.
    * @param {{vfs: object, appManager?: object}} deps
    * @returns {Promise<void>}
    */
@@ -81,12 +89,43 @@ class CalendarService {
     this._vfs = vfs;
     this._appManager = appManager ?? null;
     this._ready = this._load().then(() => {
-      this._lastCheck = Date.now();
-      this._scheduleReminders();
-      document.addEventListener("visibilitychange", this._visibilityHandler);
       eventBus.emit("calendar:ready", Object.freeze({}));
     });
     return this._ready;
+  }
+
+  /**
+   * Start checking reminders (the "calendar-reminders" service).
+   * Reminders that came due before this call are not shown.
+   * @returns {Promise<void>}
+   */
+  async startReminders() {
+    await this.ready();
+    if (this._remindersRunning) return;
+    this._remindersRunning = true;
+    this._lastCheck = Date.now();
+    document.addEventListener("visibilitychange", this._visibilityHandler);
+    this._scheduleReminders();
+  }
+
+  /**
+   * Stop checking reminders; nothing fires until they start again.
+   * @returns {void}
+   */
+  stopReminders() {
+    if (!this._remindersRunning) return;
+    this._remindersRunning = false;
+    window.clearTimeout(this._timerId);
+    this._timerId = null;
+    this._nextReminderAt = null;
+    document.removeEventListener("visibilitychange", this._visibilityHandler);
+  }
+
+  /** @returns {{summary: string, timers: number}} Status for Task Manager. */
+  getReminderDetails() {
+    const withReminders = [...this._events.values()].filter((event) => event.reminder !== null).length;
+    const next = this._nextReminderAt ? `next ${new Date(this._nextReminderAt).toLocaleString(undefined, { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : "none in the next week";
+    return { summary: `${withReminders} event${withReminders === 1 ? "" : "s"} with reminders \u00b7 ${next}`, timers: this._timerId !== null ? 1 : 0 };
   }
 
   /** @returns {Promise<void>} Resolves once events are loaded. */
@@ -316,15 +355,18 @@ class CalendarService {
 
   /** @returns {void} */
   _scheduleReminders() {
+    if (!this._remindersRunning) return;
     window.clearTimeout(this._timerId);
     const now = Date.now();
     const next = this._dueReminders(now, now + LOOKAHEAD_DAYS * 86_400_000)[0];
+    this._nextReminderAt = next ? next.at : null;
     const delay = next ? Math.max(0, Math.min(next.at - now, MAX_CHECK_INTERVAL_MS)) : MAX_CHECK_INTERVAL_MS;
     this._timerId = window.setTimeout(() => this._checkReminders(), delay);
   }
 
   /** @returns {void} */
   _checkReminders() {
+    if (!this._remindersRunning) return;
     const now = Date.now();
     const fired = loadFired(now);
     for (const reminder of this._dueReminders(this._lastCheck - 1000, now)) {
@@ -367,15 +409,17 @@ class CalendarService {
         : `In ${formatLead(minutes)} \u00b7 ${formatTime(start)}`;
     const body = [when, event.location].filter(Boolean).join(" \u00b7 ");
 
+    const open = { type: "launch", appId: "calendar", options: { date: occurrence.dateKey, eventId: event.id } };
     notificationService.notify({
       title: event.title,
-      body,
-      icon: "\u25a3",
+      message: body,
       source: "calendar",
       sound: "chime",
-      timeout: 15000,
+      duration: 15000,
+      groupKey: "calendar-reminders",
+      action: open,
       actions: [{ id: "open", label: "Open in Calendar", primary: true }],
-      onAction: () => this._appManager?.launch("calendar", { date: occurrence.dateKey, eventId: event.id }),
+      onAction: () => this._appManager?.launch("calendar", open.options).catch(() => {}),
     });
     eventBus.emit("calendar:reminder", Object.freeze({ event: cloneEvent(event), occurrenceId: occurrence.id, start: start.getTime() }));
   }
