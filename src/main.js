@@ -1,8 +1,12 @@
 /**
  * @file BrowserOS entry point.
  *
- * Boot order: theme applies before the desktop renders (avoids a
- * flash of unstyled content) → desktop builds its shell and exposes
+ * Boot order: SettingsService loads, migrates, and validates the
+ * persisted settings document → ThemeManager applies the appearance
+ * settings to <html> before the desktop renders (the render-blocking
+ * themePreboot.js script in index.html has already picked the right
+ * theme for first paint, so there is no flash of the wrong theme) →
+ * desktop builds its shell and exposes
  * a window layer + icon layer + start button → WindowManager attaches
  * to the window layer → AppManager attaches to WindowManager → apps
  * are registered (lazily — nothing is imported yet) → the Virtual
@@ -15,6 +19,13 @@
  * the application shortcuts → StartMenuManager attaches to
  * AppManager, the VFS, and RecentFilesService → About BrowserOS is
  * the only app auto-launched.
+ *
+ * Global keyboard shortcuts (src/core/keyboard/) are bound by the
+ * subsystem that owns each behavior — WindowManager (window
+ * management), DesktopManager (Escape), StartMenuManager (Win/Meta) —
+ * and, for the application-launch shortcuts, at the end of boot()
+ * below. Every subsystem reads its preferences from SettingsService
+ * and re-applies them live when they change.
  *
  * The VFS must be ready before DesktopManager and RecentFilesService
  * start — that's why `vfs.init()` moved earlier and is awaited before
@@ -32,9 +43,17 @@
  * text files open in Notes via double-click instead:
  *   appManager.launch("notes")
  *
- * Terminal (Step 9) is a full VFS-backed command line, reachable the
+ * Terminal is a full VFS-backed command line, reachable the
  * same way, or via its own desktop shortcut:
  *   appManager.launch("terminal")
+ *
+ * Settings is single-instance and accepts a deep link to a category;
+ * launching it again focuses the open window and navigates it:
+ *   appManager.launch("settings", { page: "appearance" })
+ *
+ * Settings values are reachable from the console as well, through the
+ * same service the Settings app uses:
+ *   settingsService.set("appearance.theme", "light")
  *
  * The VFS itself remains reachable from the console for anything
  * there's no UI for yet:
@@ -42,6 +61,7 @@
  *   await vfs.list("/Documents")
  */
 
+import { settingsService } from "./core/settings/settingsService.js";
 import { themeManager } from "./core/theme.js";
 import { Desktop } from "./core/desktop.js";
 import { WindowManager } from "./core/windowManager.js";
@@ -51,6 +71,7 @@ import { StartMenuManager } from "./core/startMenuManager.js";
 import { RecentFilesService } from "./core/recentFilesService.js";
 import { clipboardService } from "./core/clipboardService.js";
 import { vfs } from "./core/vfs/virtualFileSystem.js";
+import { keyboardShortcuts } from "./core/keyboard/keyboardShortcuts.js";
 
 const DESKTOP_SHORTCUTS = [
   { id: "about", label: "About BrowserOS", icon: "\u2726", appId: "about", type: "application" },
@@ -62,6 +83,7 @@ const DESKTOP_SHORTCUTS = [
 ];
 
 async function boot() {
+  settingsService.init();
   themeManager.init();
 
   const root = document.getElementById("app-root");
@@ -110,6 +132,13 @@ async function boot() {
     loader: () => import("./apps/terminal/main.js"),
   });
   appManager.register({
+    id: "settings",
+    name: "Settings",
+    icon: "\u2699",
+    singleInstance: true,
+    loader: () => import("./apps/settings/main.js"),
+  });
+  appManager.register({
     id: "recycle-bin",
     name: "Recycle Bin",
     icon: "\u267b",
@@ -141,11 +170,24 @@ async function boot() {
   });
   startMenuManager.init();
 
+  // Application shortcuts (gated by keyboard.appShortcuts). Launch
+  // errors are logged rather than thrown into the key handler.
+  const launchFromShortcut = (appId, options) => {
+    appManager.launch(appId, options).catch((error) => {
+      console.error(`[BrowserOS] shortcut failed to launch "${appId}":`, error);
+    });
+  };
+  keyboardShortcuts.bind("general.openTerminal", () => launchFromShortcut("terminal"));
+  keyboardShortcuts.bind("general.openExplorer", () => launchFromShortcut("file-explorer"));
+  keyboardShortcuts.bind("general.openSettings", () => launchFromShortcut("settings"));
+
   // Exposed for manual testing per the app framework and virtual
   // file system steps' specs, and so future steps have something to
   // call without re-plumbing the boot sequence.
   window.appManager = appManager;
   window.vfs = vfs;
+  window.settingsService = settingsService;
+  window.keyboardShortcuts = keyboardShortcuts;
 
   await appManager.launch("about");
 }

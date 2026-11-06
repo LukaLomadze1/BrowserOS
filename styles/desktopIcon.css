@@ -2,23 +2,35 @@
  * Desktop icon and rectangle-selection (marquee) styles. Positioning
  * (left/top) is set inline by DesktopIconView/DesktopManager — this
  * file only owns appearance and transitions.
+ *
+ * Icon dimensions come from custom properties DesktopManager writes on
+ * the icon layer from the desktop.iconSize / desktop.gridSpacing
+ * settings (see utils/desktopMetrics.js); the fallbacks below are the
+ * "medium" values. The icon layer also carries data-show-labels.
  */
 
 .desktop-icon {
   position: absolute;
-  width: 84px;
-  height: 88px;
+  width: var(--desktop-icon-width, 84px);
+  height: var(--desktop-icon-height, 92px);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-2) var(--space-1);
+  gap: var(--desktop-icon-gap, 3px);
+  padding: var(--desktop-icon-padding, 6px 4px);
   border-radius: var(--radius-md);
   cursor: default;
   touch-action: none;
   transition: left var(--duration-normal) var(--ease-standard),
               top var(--duration-normal) var(--ease-standard),
+              width var(--duration-normal) var(--ease-standard),
+              height var(--duration-normal) var(--ease-standard),
               background var(--duration-fast) var(--ease-sharp);
+}
+
+/* Hidden by a desktop visibility preference. */
+.desktop-icon[hidden] {
+  display: none;
 }
 
 .desktop-icon:hover {
@@ -59,24 +71,34 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  flex-shrink: 0;
+  font-size: var(--desktop-icon-glyph-font, 26px);
   border-radius: var(--radius-md);
   background: var(--color-surface-glass-strong);
   border: 1px solid var(--color-surface-glass-border);
 }
 
 .desktop-icon__label {
-  font-size: var(--text-xs);
+  /* The icon box is sized for exactly two label lines (see
+   * desktopMetrics.js); never let flex shrink the label below that. */
+  flex-shrink: 0;
+  font-size: var(--desktop-icon-label-font, var(--text-xs));
   color: var(--color-text-primary);
   text-align: center;
-  line-height: 1.3;
+  line-height: var(--desktop-icon-label-line-height, 1.3);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--icon-label-shadow);
+}
+
+/* Labels hidden by preference: removed visually only. The icon keeps
+ * its aria-label, and an inline rename still shows its input. */
+.desktop__icon-grid[data-show-labels="off"] .desktop-icon__label {
+  display: none;
 }
 
 /* ---- Inline rename ---- */
@@ -95,7 +117,7 @@
 
 .desktop-icon__rename-input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(124, 108, 246, 0.35);
+  box-shadow: 0 0 0 2px var(--color-accent-ring-soft);
 }
 
 .desktop-icon__rename-error {
@@ -113,7 +135,7 @@
   font-size: var(--text-xs);
   line-height: 1.3;
   text-align: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-popover);
   display: none;
 }
 
@@ -135,8 +157,6 @@
   border-radius: var(--radius-sm);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .desktop-icon {
-    transition: none;
-  }
+:root[data-reduced-motion="on"] .desktop-icon {
+  transition: none;
 }

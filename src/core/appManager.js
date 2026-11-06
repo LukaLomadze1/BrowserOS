@@ -103,7 +103,16 @@ class AppManager {
       const existingWindowId = this._singleInstanceWindows.get(id);
       if (existingWindowId && this._running.has(existingWindowId)) {
         this._windowManager.focusWindow(existingWindowId);
-        return this._running.get(existingWindowId).instance;
+        const existing = this._running.get(existingWindowId).instance;
+        // Forward the new launch's options so a single-instance app can
+        // honor deep links (e.g. Settings opening a specific page)
+        // without a second window.
+        try {
+          existing.onRelaunch(options);
+        } catch (error) {
+          console.error(`[AppManager] "${id}" failed to handle relaunch options:`, error);
+        }
+        return existing;
       }
     }
 

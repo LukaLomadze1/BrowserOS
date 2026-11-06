@@ -23,13 +23,22 @@
  * individually — reconcile() eventually caught it (a stale path
  * throws NOT_FOUND), but not reactively. That's fixed at the source
  * in virtualFileSystem.js; nothing here needed to change.
+ *
+ * Display limits are not this service's concern: it keeps up to
+ * MAX_STORED records and each consumer shows as many as its own
+ * preference allows (e.g. startMenu.recentFilesLimit), so raising a
+ * limit reveals history that was already there. Every change to the
+ * stored list is announced as "recentFiles:changed" so open views
+ * (Start Menu, Explorer Home) update immediately — including after
+ * clear().
  */
 
 import { eventBus } from "./eventBus.js";
 import { storage } from "./storage.js";
 
 const STORAGE_KEY = "recentFiles";
-const MAX_RECENTS = 10;
+/** Upper bound on stored records; display limits are applied by each consumer. */
+const MAX_STORED = 25;
 const TRASH_PATH_PREFIX = "/Trash/";
 const TRASH_PATH = "/Trash";
 
@@ -66,7 +75,7 @@ class RecentFilesService {
 
     this._records = this._records.filter((record) => record.entryId !== entry.id);
     this._records.unshift(this._toRecord(entry));
-    this._records = this._records.slice(0, MAX_RECENTS);
+    this._records = this._records.slice(0, MAX_STORED);
     this._persist();
   }
 
@@ -96,10 +105,11 @@ class RecentFilesService {
   }
 
   /**
+   * @param {number} [limit] - Return at most this many records.
    * @returns {Array<object>} Defensive copies, most recently opened first.
    */
-  getRecent() {
-    return this._records.map((record) => ({ ...record }));
+  getRecent(limit = Infinity) {
+    return this._records.slice(0, limit).map((record) => ({ ...record }));
   }
 
   /**
@@ -125,17 +135,22 @@ class RecentFilesService {
         // NOT_FOUND (or any other lookup failure) — the file is gone; drop it.
       }
     }
+    const changed =
+      stillValid.length !== this._records.length ||
+      stillValid.some((record, index) => record.path !== this._records[index].path || record.name !== this._records[index].name);
     this._records = stillValid;
-    this._persist();
+    if (changed) this._persist();
     return this.getRecent();
   }
 
   /**
+   * Forget every recent file. Files themselves are untouched.
    * @returns {void}
    */
   clear() {
     this._records = [];
     this._persist();
+    eventBus.emit("recentFiles:cleared", Object.freeze({}));
   }
 
   // ---------------------------------------------------------------
@@ -183,6 +198,7 @@ class RecentFilesService {
   /** @returns {void} */
   _persist() {
     storage.set(STORAGE_KEY, this._records);
+    eventBus.emit("recentFiles:changed", Object.freeze({ count: this._records.length }));
   }
 }
 

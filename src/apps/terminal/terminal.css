@@ -1,7 +1,10 @@
 /**
  * Styles for the Terminal app. Scoped under .terminal-app so nothing
  * here can leak into other window content. Reuses the same design
- * tokens (colors, spacing, fonts) as every other BrowserOS window.
+ * tokens (colors, spacing, fonts) as every other BrowserOS window;
+ * the content area uses the dedicated --color-terminal-* tokens so it
+ * stays a dark console in every theme while the window frame around
+ * it follows the active theme.
  */
 
 .terminal-app {
@@ -15,7 +18,7 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--space-3);
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--color-terminal-bg);
   border-radius: var(--radius-md);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -31,19 +34,19 @@
 .terminal__line {
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--color-text-primary);
+  color: var(--color-terminal-text);
 }
 
 .terminal__line--input {
-  color: var(--color-text-secondary);
+  color: var(--color-terminal-text-muted);
 }
 
 .terminal__line--success {
-  color: var(--color-text-primary);
+  color: var(--color-terminal-text);
 }
 
 .terminal__line--error {
-  color: var(--color-danger);
+  color: var(--color-terminal-error);
 }
 
 .terminal__prompt-line {
@@ -54,7 +57,7 @@
 
 .terminal__prompt-label {
   flex-shrink: 0;
-  color: var(--color-accent-secondary);
+  color: var(--color-terminal-prompt);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -64,10 +67,10 @@
   min-width: 0;
   background: transparent;
   border: none;
-  color: var(--color-text-primary);
+  color: var(--color-terminal-text);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  caret-color: var(--color-accent-primary);
+  caret-color: var(--color-terminal-caret);
 }
 
 .terminal__input:focus-visible {

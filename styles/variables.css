@@ -4,46 +4,93 @@
  * come from here — never hardcode a hex value or a magic number in a
  * component stylesheet.
  *
- * Theme switching works by swapping the `data-theme` attribute on
- * <html>; ThemeManager (src/core/theme.js) is the only module allowed
- * to change that attribute.
+ * Appearance is driven entirely from <html>. ThemeManager
+ * (src/core/theme.js) is the only module allowed to change these
+ * attributes and inline custom properties:
+ *
+ *   data-theme          "dark" | "light"   → color blocks below
+ *   data-transparency   "on" | "off"       → glass vs opaque surfaces
+ *   data-motion-speed   "fast" | "normal" | "slow" → duration scales
+ *   data-reduced-motion "on" | "off"       → zero-duration motion
+ *   --color-accent-primary / -primary-strong / -secondary,
+ *   --color-text-on-accent                 → active accent preset
+ *   --blur-glass-level                     → blur intensity
+ *   --window-radius                        → window corner radius
+ *
+ * The accent values declared in the theme blocks are the default
+ * (Violet) preset, so the UI is correct even before ThemeManager runs.
+ * Every other accent token is derived from those four and must not be
+ * set anywhere else.
  */
 
 :root,
 [data-theme="dark"] {
+  color-scheme: dark;
+
   /* ---- Surfaces ---- */
   --color-bg-void: #0a0c12;
   --color-bg-void-gradient-a: #0a0c12;
   --color-bg-void-gradient-b: #131726;
 
+  /* Translucent overlays: hovers, fills, and borders layered on top of a surface. */
   --color-surface-glass: rgba(255, 255, 255, 0.055);
   --color-surface-glass-strong: rgba(255, 255, 255, 0.09);
   --color-surface-glass-border: rgba(255, 255, 255, 0.09);
   --color-surface-glass-border-strong: rgba(255, 255, 255, 0.16);
 
+  /* Container surfaces. Each has an opaque "-solid" twin used when transparency is off. */
+  --color-window-bg: rgba(255, 255, 255, 0.055);
+  --color-window-bg-solid: #151824;
+  --color-window-body-bg: rgba(10, 12, 18, 0.25);
   --color-taskbar-bg: rgba(18, 20, 30, 0.55);
+  --color-taskbar-bg-solid: #12141e;
   --color-taskbar-border: rgba(255, 255, 255, 0.08);
 
-  /* ---- Accent duo (signature) ---- */
+  /* Recessed areas inside a window: text areas, displays, inputs. */
+  --color-surface-inset: rgba(0, 0, 0, 0.22);
+  --color-backdrop: rgba(0, 0, 0, 0.35);
+  --color-scrollbar-thumb: rgba(255, 255, 255, 0.09);
+
+  /* ---- Accent (default preset; overridden live by ThemeManager) ---- */
   --color-accent-primary: #7c6cf6;
   --color-accent-primary-strong: #9d8bff;
   --color-accent-secondary: #34e2c6;
-  --color-accent-gradient: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
+  --color-text-on-accent: #0a0c12;
 
   /* ---- Text ---- */
   --color-text-primary: #eef1f7;
   --color-text-secondary: #97a0b3;
   --color-text-tertiary: #5b6478;
-  --color-text-on-accent: #0a0c12;
 
   /* ---- Semantic ---- */
   --color-danger: #f2495c;
   --color-success: #34e2a6;
   --color-warning: #f5b955;
 
+  /* ---- Terminal content area (stays dark in every theme) ---- */
+  --color-terminal-bg: rgba(0, 0, 0, 0.35);
+  --color-terminal-text: var(--color-text-primary);
+  --color-terminal-text-muted: var(--color-text-secondary);
+  --color-terminal-prompt: var(--color-accent-secondary);
+  --color-terminal-caret: var(--color-accent-primary);
+  --color-terminal-error: var(--color-danger);
+
+  /* ---- Wallpaper glow intensity (tinted by the accent) ---- */
+  --wallpaper-glow-a-strength: 25%;
+  --wallpaper-glow-b-strength: 18%;
+
+  /* ---- Desktop icon label legibility over the wallpaper ---- */
+  --icon-label-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+
+  /* ---- Elevation ---- */
+  --shadow-window: 0 20px 60px rgba(0, 0, 0, 0.45);
+  --shadow-taskbar: 0 -4px 30px rgba(0, 0, 0, 0.3);
+  --shadow-popover: 0 4px 12px rgba(0, 0, 0, 0.35);
+
   /* ---- Blur ---- */
-  --blur-glass: 24px;
-  --blur-glass-strong: 40px;
+  --blur-glass-level: 24px;
+  --blur-glass: var(--blur-glass-level);
+  --blur-glass-strong: calc(var(--blur-glass-level) * 5 / 3);
 
   /* ---- Radius ---- */
   --radius-sm: 6px;
@@ -51,6 +98,9 @@
   --radius-lg: 16px;
   --radius-xl: 22px;
   --radius-round: 999px;
+  --window-radius: 16px;
+  /* Large system panels (Start Menu, dialogs) scale with the window radius: 16px → 22px. */
+  --panel-radius: calc(var(--window-radius) * 1.375);
 
   /* ---- Spacing scale (4px base) ---- */
   --space-1: 4px;
@@ -74,21 +124,16 @@
   --text-xl: 20px;
   --text-2xl: 28px;
 
-  /* ---- Motion ---- */
+  /* ---- Motion (the "normal" scale; see speed blocks below) ---- */
   --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-sharp: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-fast: 120ms;
   --duration-normal: 220ms;
   --duration-slow: 400ms;
 
-  /* ---- Elevation ---- */
-  --shadow-window: 0 20px 60px rgba(0, 0, 0, 0.45);
-  --shadow-taskbar: 0 -4px 30px rgba(0, 0, 0, 0.3);
-  --shadow-focus-ring: 0 0 0 2px var(--color-bg-void), 0 0 0 4px var(--color-accent-primary);
-
   /* ---- Layout constants ---- */
   --taskbar-height: 52px;
-  --icon-grid-cell: 96px;
+  --icon-grid-cell: 100px; /* Medium icons, normal spacing; DesktopManager overrides it from settings. */
 
   /* ---- Window chrome ---- */
   --window-titlebar-height: 40px;
@@ -100,7 +145,6 @@
   /* ---- Desktop icons ---- */
   --icon-grid-inset: 24px;
   --icon-size: 48px;
-  --icon-selection-color: rgba(124, 108, 246, 0.28);
 
   /* ---- Context menu ---- */
   --context-menu-width: 220px;
@@ -108,10 +152,114 @@
   /* ---- Start menu ---- */
   --start-menu-width: 400px;
   --start-menu-max-height: 560px;
+
+  /* ---- Derived accent tokens (theme-independent formulas) ---- */
+  --color-accent-gradient: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
+  --color-accent-soft: color-mix(in srgb, var(--color-accent-primary) 16%, transparent);
+  --color-accent-ring-soft: color-mix(in srgb, var(--color-accent-primary) 35%, transparent);
+  --icon-selection-color: color-mix(in srgb, var(--color-accent-primary) 28%, transparent);
+  --shadow-focus-ring: 0 0 0 2px var(--color-bg-void), 0 0 0 4px var(--color-accent-primary);
+  --wallpaper-glow-a: color-mix(in srgb, var(--color-accent-primary) var(--wallpaper-glow-a-strength), transparent);
+  --wallpaper-glow-b: color-mix(in srgb, var(--color-accent-secondary) var(--wallpaper-glow-b-strength), transparent);
 }
 
+/* ------------------------------------------------------------------
+ * Light theme. Designed separately rather than inverted: overlays are
+ * tinted with a cool slate instead of black, container surfaces are
+ * near-white glass, text uses slate tones tuned for contrast on those
+ * surfaces, and shadows are softer and cooler.
+ * ------------------------------------------------------------------ */
+[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg-void: #e8ebf2;
+  --color-bg-void-gradient-a: #eef1f7;
+  --color-bg-void-gradient-b: #d8deea;
+
+  --color-surface-glass: rgba(20, 28, 48, 0.045);
+  --color-surface-glass-strong: rgba(20, 28, 48, 0.08);
+  --color-surface-glass-border: rgba(20, 28, 48, 0.1);
+  --color-surface-glass-border-strong: rgba(20, 28, 48, 0.18);
+
+  --color-window-bg: rgba(250, 251, 254, 0.72);
+  --color-window-bg-solid: #f7f8fb;
+  --color-window-body-bg: rgba(255, 255, 255, 0.45);
+  --color-taskbar-bg: rgba(246, 247, 251, 0.74);
+  --color-taskbar-bg-solid: #f2f4f8;
+  --color-taskbar-border: rgba(20, 28, 48, 0.1);
+
+  --color-surface-inset: rgba(255, 255, 255, 0.78);
+  --color-backdrop: rgba(30, 38, 58, 0.22);
+  --color-scrollbar-thumb: rgba(20, 28, 48, 0.22);
+
+  --color-accent-primary: #5b48d9;
+  --color-accent-primary-strong: #4a37c2;
+  --color-accent-secondary: #0f8a78;
+  --color-text-on-accent: #ffffff;
+
+  --color-text-primary: #151a26;
+  --color-text-secondary: #4a5366;
+  --color-text-tertiary: #6b7488;
+
+  --color-danger: #d42a42;
+  --color-success: #0b8a5f;
+  --color-warning: #a86710;
+
+  --color-terminal-bg: #1a1e2b;
+  --color-terminal-text: #e4e8f1;
+  --color-terminal-text-muted: #9ba4b6;
+  --color-terminal-prompt: color-mix(in srgb, var(--color-accent-secondary) 50%, #ffffff);
+  --color-terminal-caret: color-mix(in srgb, var(--color-accent-primary) 55%, #ffffff);
+  --color-terminal-error: #ff7086;
+
+  --wallpaper-glow-a-strength: 22%;
+  --wallpaper-glow-b-strength: 16%;
+
+  --icon-label-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+
+  --shadow-window: 0 18px 50px rgba(30, 41, 66, 0.18), 0 2px 6px rgba(30, 41, 66, 0.08);
+  --shadow-taskbar: 0 -4px 24px rgba(30, 41, 66, 0.1);
+  --shadow-popover: 0 4px 12px rgba(30, 41, 66, 0.18);
+}
+
+/* ---- Transparency off: opaque containers, no blur ----
+ * The selected blur intensity stays in --blur-glass-level; only the
+ * applied tokens are overridden, so turning transparency back on
+ * restores the previous blur exactly.
+ */
+:root[data-transparency="off"] {
+  --blur-glass: 0px;
+  --blur-glass-strong: 0px;
+  --color-window-bg: var(--color-window-bg-solid);
+  --color-taskbar-bg: var(--color-taskbar-bg-solid);
+}
+
+/* ---- Animation speed scales ---- */
+:root[data-motion-speed="fast"] {
+  --duration-fast: 70ms;
+  --duration-normal: 130ms;
+  --duration-slow: 240ms;
+}
+
+:root[data-motion-speed="slow"] {
+  --duration-fast: 200ms;
+  --duration-normal: 380ms;
+  --duration-slow: 680ms;
+}
+
+/* ---- Reduced motion (effective state, resolved by ThemeManager) ----
+ * Declared after the speed scales so it always wins.
+ */
+:root[data-reduced-motion="on"] {
+  --duration-fast: 0ms;
+  --duration-normal: 0ms;
+  --duration-slow: 0ms;
+}
+
+/* Fallback only for the moment before ThemeManager has resolved the
+ * preference (or if it never runs). */
 @media (prefers-reduced-motion: reduce) {
-  :root {
+  :root:not([data-reduced-motion]) {
     --duration-fast: 0ms;
     --duration-normal: 0ms;
     --duration-slow: 0ms;

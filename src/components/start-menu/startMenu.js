@@ -21,6 +21,7 @@ class StartMenuView {
   constructor(callbacks) {
     this._callbacks = callbacks;
     this._isOpen = false;
+    this._sectionVisibility = { pinned: true, recentApps: true, recentFiles: true };
     this._buildDom();
   }
 
@@ -111,35 +112,75 @@ class StartMenuView {
   }
 
   /**
+   * Replace the default sections with a list of search results.
    * @param {string} query
-   * @param {Array<{id: string, name: string, icon: string|null}>} results
-   * @param {(id: string) => void} onLaunch
+   * @param {Array<{key: string, kind: string, name: string, icon: string|null, detail: string, activate: () => void}>} results - Already sorted and limited.
+   * @param {{pending?: boolean}} [options] - `pending` shows that more results are still being looked up.
    * @returns {void}
    */
-  showSearchResults(query, results, onLaunch) {
+  showSearchResults(query, results, options = {}) {
     this._pinnedSectionEl.hidden = true;
     this._recentSectionEl.hidden = true;
     this._recentFilesSectionEl.hidden = true;
+    this._allHiddenEl.hidden = true;
     this._resultsSectionEl.hidden = false;
 
     clearElement(this._resultsListEl);
-    if (results.length === 0) {
-      this._resultsListEl.append(
-        createElement("div", { className: "start-menu__empty", text: `No results for "${query}"` })
-      );
-      return;
+    for (const result of results) {
+      this._resultsListEl.append(this._buildResultRow(result));
     }
-    for (const app of results) {
-      this._resultsListEl.append(this._buildRow(app, onLaunch, null));
+    if (options.pending) {
+      this._resultsListEl.append(
+        createElement("div", { className: "start-menu__empty start-menu__empty--pending", attrs: { role: "status" }, text: "Searching files\u2026" })
+      );
+    } else if (results.length === 0) {
+      this._resultsListEl.append(
+        createElement("div", { className: "start-menu__empty", attrs: { role: "status" }, text: `No results for "${query}"` })
+      );
     }
   }
 
   /** @returns {void} */
   showDefaultSections() {
     this._resultsSectionEl.hidden = true;
-    this._pinnedSectionEl.hidden = false;
-    this._recentSectionEl.hidden = false;
-    this._recentFilesSectionEl.hidden = false;
+    this._applySectionVisibility();
+  }
+
+  /**
+   * Show or hide the default sections (Pinned, Recent Applications,
+   * Recent Files). Takes effect immediately unless search results are
+   * currently displayed, in which case it applies once search clears.
+   * @param {{pinned: boolean, recentApps: boolean, recentFiles: boolean}} visibility
+   * @returns {void}
+   */
+  setSectionVisibility(visibility) {
+    this._sectionVisibility = { ...visibility };
+    if (this._resultsSectionEl.hidden) this._applySectionVisibility();
+  }
+
+  /**
+   * @param {string} text
+   * @returns {void}
+   */
+  setSearchPlaceholder(text) {
+    this._searchInputEl.placeholder = text;
+  }
+
+  /**
+   * @returns {HTMLElement|null} The first search result row, if any.
+   */
+  getFirstResultButton() {
+    if (this._resultsSectionEl.hidden) return null;
+    return this._resultsListEl.querySelector(".start-menu__row");
+  }
+
+  /** @returns {void} */
+  _applySectionVisibility() {
+    const { pinned, recentApps, recentFiles } = this._sectionVisibility;
+    this._pinnedSectionEl.hidden = !pinned;
+    this._recentSectionEl.hidden = !recentApps;
+    this._recentFilesSectionEl.hidden = !recentFiles;
+    this._allHiddenEl.hidden = pinned || recentApps || recentFiles;
   }
 
   /**
@@ -216,9 +257,21 @@ class StartMenuView {
       ],
     });
 
+    this._allHiddenEl = createElement("div", {
+      className: "start-menu__empty start-menu__empty--sections",
+      text: "Pinned and recent sections are turned off. Type to search, or change this in Settings \u203a Start Menu.",
+    });
+    this._allHiddenEl.hidden = true;
+
     const body = createElement("div", {
       className: "start-menu__body",
-      children: [this._pinnedSectionEl, this._recentSectionEl, this._recentFilesSectionEl, this._resultsSectionEl],
+      children: [
+        this._pinnedSectionEl,
+        this._recentSectionEl,
+        this._recentFilesSectionEl,
+        this._allHiddenEl,
+        this._resultsSectionEl,
+      ],
     });
 
     const footer = createElement("div", {
@@ -302,6 +355,28 @@ class StartMenuView {
         createElement("span", { className: "start-menu__row-text", children: textChildren }),
       ],
       on: { click: () => onLaunch(app.id) },
+    });
+  }
+
+  /**
+   * @param {{key: string, kind: string, name: string, icon: string|null, detail: string, activate: () => void}} result
+   * @returns {HTMLElement}
+   */
+  _buildResultRow(result) {
+    return createElement("button", {
+      className: `start-menu__row start-menu__row--${result.kind}`,
+      attrs: { type: "button", "aria-label": `${result.name}, ${result.detail}`, "data-result-key": result.key },
+      children: [
+        createElement("span", { className: "start-menu__row-icon", attrs: { "aria-hidden": "true" }, text: result.icon || "\u25a2" }),
+        createElement("span", {
+          className: "start-menu__row-text",
+          children: [
+            createElement("span", { className: "start-menu__row-name", text: result.name }),
+            createElement("span", { className: "start-menu__row-time", text: result.detail }),
+          ],
+        }),
+      ],
+      on: { click: () => result.activate() },
     });
   }
 

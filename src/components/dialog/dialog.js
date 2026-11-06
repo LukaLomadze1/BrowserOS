@@ -12,8 +12,10 @@
  */
 
 import { createElement } from "../../utils/dom.js";
+import { getMotionDuration } from "../../utils/motion.js";
 
-const CLOSE_ANIMATION_MS = 160;
+/** Extra time allowed past the exit transition (--duration-normal) before the backdrop is removed. */
+const CLOSE_ANIMATION_GRACE_MS = 40;
 
 class Dialog {
   /**
@@ -52,7 +54,7 @@ class Dialog {
     this._backdropEl.classList.remove("dialog-backdrop--visible");
 
     const backdrop = this._backdropEl;
-    window.setTimeout(() => backdrop.remove(), CLOSE_ANIMATION_MS);
+    window.setTimeout(() => backdrop.remove(), getMotionDuration("normal") + CLOSE_ANIMATION_GRACE_MS);
 
     if (this._previousActiveElement && typeof this._previousActiveElement.focus === "function") {
       this._previousActiveElement.focus();

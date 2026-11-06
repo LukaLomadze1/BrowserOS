@@ -15,8 +15,10 @@
  */
 
 import { createElement } from "../../utils/dom.js";
+import { getMotionDuration } from "../../utils/motion.js";
 
-const CLOSE_ANIMATION_MS = 160;
+/** Extra time allowed past the exit transition (--duration-fast) before the element is removed. */
+const CLOSE_ANIMATION_GRACE_MS = 40;
 
 class ContextMenu {
   constructor() {
@@ -34,7 +36,9 @@ class ContextMenu {
   }
 
   /**
-   * @param {Array<{label?: string, action?: () => void, disabled?: boolean, separator?: boolean, submenu?: Array}>} items
+   * @param {Array<{label?: string, action?: () => void, disabled?: boolean, separator?: boolean, submenu?: Array, checked?: boolean, radio?: boolean}>} items -
+   *   `checked` renders a check mark and a menuitemcheckbox role (menuitemradio when `radio`
+   *   is also set) for items that reflect an on/off or one-of-many state.
    * @param {{x: number, y: number}|{itemRect: DOMRect}} anchor - Either viewport coordinates (top-level menus) or a trigger item's rect (submenus, anchored beside it).
    * @param {{onClose?: () => void, parentMenu?: ContextMenu}} [options] - `onClose` fires once, whenever the menu closes for any reason. `parentMenu` is set internally when opening a submenu.
    * @returns {void}
@@ -70,6 +74,19 @@ class ContextMenu {
   }
 
   /**
+   * Choosing an item ends the whole interaction: close from the root
+   * menu down, so a parent menu is never left open after an item in
+   * one of its submenus is activated. The root's onClose fires once.
+   * @returns {void}
+   */
+  _hideMenuTree() {
+    let root = this;
+    while (root._parentMenu) root = root._parentMenu;
+    root.hide();
+    this.hide();
+  }
+
+  /**
    * Close the menu, if open. Safe to call when already closed. Also
    * closes any open submenu first, so a parent can never disappear
    * while a submenu is still hanging open on screen.
@@ -86,7 +103,7 @@ class ContextMenu {
     const el = this._el;
     this._el = null;
     el.classList.remove("context-menu--visible");
-    window.setTimeout(() => el.remove(), CLOSE_ANIMATION_MS);
+    window.setTimeout(() => el.remove(), getMotionDuration("fast") + CLOSE_ANIMATION_GRACE_MS);
 
     if (this._onClose) {
       const callback = this._onClose;
@@ -117,8 +134,10 @@ class ContextMenu {
 
     const disabled = item.disabled ?? false;
     const hasSubmenu = Array.isArray(item.submenu) && item.submenu.length > 0;
+    const checkable = !hasSubmenu && typeof item.checked === "boolean";
 
-    const attrs = { type: "button", role: "menuitem" };
+    const attrs = { type: "button", role: checkable ? (item.radio ? "menuitemradio" : "menuitemcheckbox") : "menuitem" };
+    if (checkable) attrs["aria-checked"] = item.checked ? "true" : "false";
     if (hasSubmenu) {
       attrs["aria-haspopup"] = "true";
       attrs["aria-expanded"] = "false";
@@ -128,17 +147,24 @@ class ContextMenu {
       attrs.disabled = "true";
     }
 
-    const children = hasSubmenu
-      ? [
-          createElement("span", { className: "context-menu__item-label", text: item.label }),
-          createElement("span", { className: "context-menu__item-arrow", attrs: { "aria-hidden": "true" }, text: "\u203a" }),
-        ]
-      : undefined;
+    let children;
+    if (hasSubmenu) {
+      children = [
+        createElement("span", { className: "context-menu__item-label", text: item.label }),
+        createElement("span", { className: "context-menu__item-arrow", attrs: { "aria-hidden": "true" }, text: "\u203a" }),
+      ];
+    } else if (checkable) {
+      children = [
+        createElement("span", { className: "context-menu__item-check", attrs: { "aria-hidden": "true" }, text: item.checked ? "\u2713" : "" }),
+        createElement("span", { className: "context-menu__item-label", text: item.label }),
+      ];
+    }
 
     const className = [
       "context-menu__item",
       disabled ? "context-menu__item--disabled" : "",
       hasSubmenu ? "context-menu__item--has-submenu" : "",
+      checkable ? "context-menu__item--checkable" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -147,12 +173,12 @@ class ContextMenu {
       ? {}
       : hasSubmenu
         ? { click: (e) => { e.stopPropagation(); this._toggleSubmenu(item, el); } }
-        : { click: () => { this.hide(); item.action?.(); } };
+        : { click: () => { this._hideMenuTree(); item.action?.(); } };
 
     const el = createElement("button", {
       className,
       attrs,
-      text: hasSubmenu ? undefined : item.label,
+      text: children ? undefined : item.label,
       children,
       on,
     });

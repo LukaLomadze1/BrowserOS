@@ -14,7 +14,10 @@
  */
 
 import { createElement } from "../../utils/dom.js";
+import { getMotionDuration } from "../../utils/motion.js";
 
+/** Extra time allowed past the exit transition before the window is removed regardless. */
+const CLOSE_ANIMATION_GRACE_MS = 40;
 /** Minimum horizontal sliver of a window that must stay reachable when dragged near an edge. */
 const MIN_VISIBLE_PX = 120;
 /** Titlebar height in pixels; must match --window-titlebar-height. */
@@ -185,15 +188,21 @@ export class WindowView {
    */
   playCloseAnimation(onComplete) {
     let settled = false;
-    const finish = () => {
+    const finish = (e) => {
+      // transitionend bubbles: ignore child transitions (e.g. the close
+      // button's hover fade) and the window's own faster properties,
+      // and finish on the exit fade itself.
+      if (e && (e.target !== this._el || e.propertyName !== "opacity")) return;
       if (settled) return;
       settled = true;
       this._el.removeEventListener("transitionend", finish);
       onComplete();
     };
     this._el.addEventListener("transitionend", finish);
-    // Safety net in case transitionend never fires (e.g. reduced motion).
-    setTimeout(finish, 260);
+    // Safety net in case transitionend never fires (e.g. zero-duration
+    // transitions under reduced motion). Derived from the live motion
+    // token so the "slow" speed isn't cut short.
+    setTimeout(finish, getMotionDuration("normal") + CLOSE_ANIMATION_GRACE_MS);
     this._el.classList.add("window--exiting");
   }
 

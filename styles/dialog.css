@@ -18,14 +18,14 @@
 }
 
 .dialog-backdrop--visible {
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--color-backdrop);
   pointer-events: auto;
 }
 
 .dialog {
   width: min(420px, calc(100vw - var(--space-6)));
   padding: var(--space-5);
-  border-radius: var(--radius-xl);
+  border-radius: var(--panel-radius);
   background: var(--color-taskbar-bg);
   border: 1px solid var(--color-surface-glass-border);
   backdrop-filter: blur(var(--blur-glass-strong));
@@ -132,9 +132,79 @@
   overflow-wrap: anywhere;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .dialog-backdrop,
-  .dialog {
-    transition: none;
-  }
+/* ---- Folder picker ---- */
+.folder-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.folder-picker__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.folder-picker__up {
+  flex-shrink: 0;
+  height: 30px;
+}
+
+.folder-picker__up:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.folder-picker__path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.folder-picker__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-surface-glass-border);
+}
+
+.folder-picker__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  text-align: left;
+  color: var(--color-text-primary);
+}
+
+.folder-picker__item:hover {
+  background: var(--color-accent-soft);
+}
+
+.folder-picker__empty {
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.folder-picker__hint {
+  font-size: var(--text-xs);
+}
+
+:root[data-reduced-motion="on"] .dialog-backdrop,
+:root[data-reduced-motion="on"] .dialog {
+  transition: none;
 }

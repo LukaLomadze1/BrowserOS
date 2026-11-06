@@ -16,6 +16,7 @@
 import { eventBus } from "../../core/eventBus.js";
 import { storage } from "../../core/storage.js";
 import { openVfsEntry } from "../../core/vfs/vfsOpener.js";
+import { keyboardShortcuts } from "../../core/keyboard/keyboardShortcuts.js";
 import { TerminalView } from "./terminalView.js";
 import { tokenize, createCommandRegistry } from "./commands.js";
 
@@ -94,40 +95,32 @@ class TerminalManager {
    * @returns {void}
    */
   _handleInputKeyDown(e) {
-    if (e.key !== "Tab") {
+    // Key bindings come from the shared shortcut catalog, so the
+    // Settings shortcut reference always describes what happens here.
+    const shortcut = (id) => keyboardShortcuts.matches(e, id);
+
+    if (!shortcut("terminal.complete")) {
       this._tabState = null;
     }
 
-    if (e.ctrlKey && e.key.toLowerCase() === "l") {
+    if (shortcut("terminal.clear")) {
       e.preventDefault();
       this._clear();
-      return;
-    }
-    if (e.ctrlKey && e.key.toLowerCase() === "c") {
+    } else if (shortcut("terminal.cancel")) {
       e.preventDefault();
       this._cancelCurrentLine();
-      return;
-    }
-
-    switch (e.key) {
-      case "Enter":
-        e.preventDefault();
-        this._handleSubmit();
-        break;
-      case "ArrowUp":
-        e.preventDefault();
-        this._recallHistory(-1);
-        break;
-      case "ArrowDown":
-        e.preventDefault();
-        this._recallHistory(1);
-        break;
-      case "Tab":
-        e.preventDefault();
-        this._handleTabCompletion();
-        break;
-      default:
-        break;
+    } else if (shortcut("terminal.run")) {
+      e.preventDefault();
+      this._handleSubmit();
+    } else if (shortcut("terminal.historyPrevious")) {
+      e.preventDefault();
+      this._recallHistory(-1);
+    } else if (shortcut("terminal.historyNext")) {
+      e.preventDefault();
+      this._recallHistory(1);
+    } else if (shortcut("terminal.complete")) {
+      e.preventDefault();
+      this._handleTabCompletion();
     }
   }
 

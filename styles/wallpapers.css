@@ -1,0 +1,84 @@
+/**
+ * Desktop wallpaper presets.
+ *
+ * ThemeManager sets data-wallpaper on <html> from the wallpaper.preset
+ * setting and --wallpaper-dim from wallpaper.dim. Each preset below is
+ * built from theme tokens (--color-bg-void-gradient-*, accent colors),
+ * so every wallpaper adapts to the light and dark themes. The same
+ * rules style the previews in Settings (elements carrying
+ * data-wallpaper-preview), so a preview always matches the real thing.
+ *
+ * Preset ids must match WALLPAPER_PRESETS in settingsSchema.js.
+ */
+
+:root {
+  --wallpaper-dim-color: #000000;
+}
+
+:root[data-theme="light"] {
+  --wallpaper-dim-color: #ffffff;
+}
+
+/* ---- Aurora (default): accent-tinted glows ---- */
+.desktop__wallpaper,
+[data-wallpaper-preview="aurora"] {
+  background:
+    radial-gradient(circle at 15% 10%, var(--wallpaper-glow-a), transparent 45%),
+    radial-gradient(circle at 85% 85%, var(--wallpaper-glow-b), transparent 50%),
+    linear-gradient(160deg, var(--color-bg-void-gradient-b) 0%, var(--color-bg-void-gradient-a) 65%);
+}
+
+/* ---- Nebula: violet and magenta clouds ---- */
+:root[data-wallpaper="nebula"] .desktop__wallpaper,
+[data-wallpaper-preview="nebula"] {
+  background:
+    radial-gradient(ellipse at 70% 20%, rgba(186, 85, 211, 0.28), transparent 50%),
+    radial-gradient(ellipse at 25% 75%, rgba(88, 101, 242, 0.26), transparent 55%),
+    radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.12), transparent 60%),
+    linear-gradient(200deg, var(--color-bg-void-gradient-b) 0%, var(--color-bg-void-gradient-a) 80%);
+}
+
+/* ---- Sunset: warm horizon ---- */
+:root[data-wallpaper="sunset"] .desktop__wallpaper,
+[data-wallpaper-preview="sunset"] {
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(251, 146, 60, 0.38), transparent 55%),
+    radial-gradient(ellipse at 15% 90%, rgba(244, 63, 94, 0.26), transparent 50%),
+    radial-gradient(ellipse at 85% 95%, rgba(250, 204, 21, 0.16), transparent 45%),
+    linear-gradient(180deg, var(--color-bg-void-gradient-a) 0%, var(--color-bg-void-gradient-b) 100%);
+}
+
+/* ---- Ocean: deep blue and teal ---- */
+:root[data-wallpaper="ocean"] .desktop__wallpaper,
+[data-wallpaper-preview="ocean"] {
+  background:
+    radial-gradient(ellipse at 20% 30%, rgba(14, 165, 233, 0.28), transparent 50%),
+    radial-gradient(ellipse at 80% 70%, rgba(20, 184, 166, 0.26), transparent 55%),
+    linear-gradient(170deg, var(--color-bg-void-gradient-b) 0%, var(--color-bg-void-gradient-a) 75%);
+}
+
+/* ---- Graphite: neutral, low-distraction ---- */
+:root[data-wallpaper="graphite"] .desktop__wallpaper,
+[data-wallpaper-preview="graphite"] {
+  background:
+    radial-gradient(circle at 50% 0%, var(--color-surface-glass-strong), transparent 60%),
+    repeating-linear-gradient(135deg, var(--color-surface-glass) 0 2px, transparent 2px 14px),
+    linear-gradient(180deg, var(--color-bg-void-gradient-b) 0%, var(--color-bg-void-gradient-a) 100%);
+}
+
+/* ---- Solid: the theme's base color ---- */
+:root[data-wallpaper="solid"] .desktop__wallpaper,
+[data-wallpaper-preview="solid"] {
+  background: var(--color-bg-void);
+}
+
+/* ---- Dimming overlay ---- */
+.desktop__wallpaper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--wallpaper-dim-color);
+  opacity: var(--wallpaper-dim, 0);
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-standard);
+}

@@ -42,6 +42,8 @@ class ExplorerView {
   constructor(callbacks) {
     this._callbacks = callbacks;
     this._viewMode = "grid";
+    /** @type {{size: boolean, modified: boolean, type: boolean}} */
+    this._columns = { size: true, modified: true, type: true };
     this._buildDom();
   }
 
@@ -80,6 +82,27 @@ class ExplorerView {
       button.classList.toggle("explorer__view-button--active", key === mode);
     }
     this._detailsHeaderEl.hidden = mode !== "details";
+  }
+
+  /**
+   * Which metadata columns the Details view shows (and which details
+   * the List view adds after each name). Name is always shown. Takes
+   * effect on the next renderItems().
+   * @param {{size: boolean, modified: boolean, type: boolean}} columns
+   * @returns {void}
+   */
+  setColumnVisibility(columns) {
+    this._columns = { ...columns };
+    const tracks = ["minmax(0, 1fr)"];
+    if (columns.modified) tracks.push("140px");
+    if (columns.type) tracks.push("100px");
+    if (columns.size) tracks.push("90px");
+    // One per-window custom property keeps the header and every row on
+    // the same grid tracks.
+    this._el.style.setProperty("--explorer-details-columns", tracks.join(" "));
+    this._detailsHeaderButtons.modified.hidden = !columns.modified;
+    this._detailsHeaderButtons.type.hidden = !columns.type;
+    this._detailsHeaderButtons.size.hidden = !columns.size;
   }
 
   /**
@@ -236,25 +259,43 @@ class ExplorerView {
     if (item._cut) classNames.push("explorer__row--cut");
 
     const iconEl = createElement("span", { className: "explorer__row-icon", attrs: { "aria-hidden": "true" }, text: icon });
-    const nameEl = createElement("span", { className: "explorer__row-name", text: item.name });
+    const displayName = item._displayName ?? item.name;
+    const nameEl = createElement("span", { className: "explorer__row-name", text: displayName });
+    const columns = this._columns;
 
     let children;
     if (this._viewMode === "details") {
-      children = [
-        createElement("span", { className: "explorer__row-cell explorer__row-cell--name", children: [iconEl, nameEl] }),
-        createElement("span", { className: "explorer__row-cell explorer__row-cell--modified", text: item._modifiedLabel ?? "" }),
-        createElement("span", { className: "explorer__row-cell explorer__row-cell--type", text: item._typeLabel ?? "" }),
-        createElement("span", { className: "explorer__row-cell explorer__row-cell--size", text: item._sizeLabel ?? "" }),
-      ];
+      children = [createElement("span", { className: "explorer__row-cell explorer__row-cell--name", children: [iconEl, nameEl] })];
+      if (columns.modified) {
+        children.push(createElement("span", { className: "explorer__row-cell explorer__row-cell--modified", text: item._modifiedLabel ?? "" }));
+      }
+      if (columns.type) {
+        children.push(createElement("span", { className: "explorer__row-cell explorer__row-cell--type", text: item._typeLabel ?? "" }));
+      }
+      if (columns.size) {
+        children.push(createElement("span", { className: "explorer__row-cell explorer__row-cell--size", text: item._sizeLabel ?? "" }));
+      }
     } else if (this._viewMode === "list") {
-      children = [iconEl, nameEl, createElement("span", { className: "explorer__row-type", text: item._typeLabel ?? "" })];
+      const details = [];
+      if (columns.type) details.push(item._typeLabel);
+      if (columns.size && item._sizeLabel) details.push(item._sizeLabel);
+      if (columns.modified) details.push(item._modifiedLabel);
+      children = [iconEl, nameEl, createElement("span", { className: "explorer__row-type", text: details.filter(Boolean).join(" \u00b7 ") })];
     } else {
       children = [iconEl, nameEl];
     }
 
     return createElement("button", {
       className: classNames.join(" "),
-      attrs: { type: "button", "data-entry-id": item.id, "aria-selected": item._selected ? "true" : "false", title: item.path },
+      attrs: {
+        type: "button",
+        "data-entry-id": item.id,
+        "aria-selected": item._selected ? "true" : "false",
+        // The accessible name and tooltip always carry the real name,
+        // even when the extension is hidden from the visible label.
+        "aria-label": item.name,
+        title: item.path,
+      },
       children,
       on: {
         click: (e) => rowCallbacks.onClick(item.id, e),
@@ -307,6 +348,7 @@ class ExplorerView {
     const nameEl = row.querySelector(".explorer__row-name");
     if (!nameEl) return;
 
+    // The visible label may omit the extension; the input always holds the real name.
     const fullName = `${config.stem}${config.extension}`;
     const inputEl = createElement("input", {
       className: "explorer__rename-input",

@@ -62,7 +62,7 @@ button:focus-visible,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-surface-glass-strong);
+  background: var(--color-scrollbar-thumb);
   border-radius: var(--radius-round);
 }
 

@@ -2,13 +2,15 @@
  * @file Desktop icon grid math. Pure functions only — DesktopManager
  * reasons about cell positions without touching layout directly.
  *
- * Grid dimensions are NOT duplicated as JS literals. They are read
- * once from the CSS custom properties (--icon-grid-inset,
- * --icon-grid-cell) defined in styles/variables.css, which is the
- * single source of truth both CSS and JS draw from. This is what
- * fixed Bug 1: two independently-maintained copies of the same
- * numbers could silently drift; reading the CSS value directly
- * makes drift impossible.
+ * Grid dimensions are never duplicated as independent literals.
+ * DesktopManager computes them from the desktop settings
+ * (utils/desktopMetrics.js), writes them to the icon layer's CSS
+ * custom properties, and hands the same numbers to configureGrid(), so
+ * CSS sizing and JS positioning cannot drift apart. Until
+ * configureGrid() is called, the values are read once from the
+ * --icon-grid-inset / --icon-grid-cell tokens in styles/variables.css.
+ * All coordinates may be fractional when free placement (align to
+ * grid off) is in use; cell occupancy always uses rounded cells.
  */
 
 const DEFAULT_GRID_INSET = 24;
@@ -30,7 +32,18 @@ function readCssPixelVar(varName, fallback) {
 }
 
 /**
- * @returns {number} The grid's outer inset in pixels, from --icon-grid-inset.
+ * Set the grid geometry explicitly. Called by DesktopManager whenever
+ * icon size or grid spacing changes.
+ * @param {{inset: number, cellSize: number}} metrics
+ * @returns {void}
+ */
+export function configureGrid({ inset, cellSize }) {
+  if (Number.isFinite(inset) && inset >= 0) cachedGridInset = inset;
+  if (Number.isFinite(cellSize) && cellSize > 0) cachedCellSize = cellSize;
+}
+
+/**
+ * @returns {number} The grid's outer inset in pixels.
  */
 export function getGridInset() {
   if (cachedGridInset === null) {
@@ -40,7 +53,7 @@ export function getGridInset() {
 }
 
 /**
- * @returns {number} The size of one grid cell in pixels, from --icon-grid-cell.
+ * @returns {number} The size of one grid cell in pixels.
  */
 export function getCellSize() {
   if (cachedCellSize === null) {
@@ -112,10 +125,49 @@ export function clampCell(col, row, columns, rows) {
 /**
  * @param {number} col
  * @param {number} row
- * @returns {string} Stable key for a Set/Map of occupied cells.
+ * @returns {string} Stable key for a Set/Map of occupied cells. Fractional positions are keyed by their nearest cell.
  */
 export function cellKey(col, row) {
-  return `${col}:${row}`;
+  return `${Math.round(col)}:${Math.round(row)}`;
+}
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @returns {{col: number, row: number}} Fractional cell coordinates for a raw pixel position (free placement).
+ */
+export function pixelsToCell(x, y) {
+  const inset = getGridInset();
+  const cell = getCellSize();
+  return { col: Math.max(0, (x - inset) / cell), row: Math.max(0, (y - inset) / cell) };
+}
+
+/**
+ * The free cell inside the grid closest to a target cell (Euclidean
+ * distance; ties prefer the same column, then lower rows). Used to
+ * re-home icons that no longer fit after the desktop shrinks.
+ * @param {{col: number, row: number}} target
+ * @param {Set<string>} occupiedKeys
+ * @param {number} columns
+ * @param {number} rows
+ * @returns {{col: number, row: number}|null} Null when every cell in the grid is taken.
+ */
+export function findNearestFreeCell(target, occupiedKeys, columns, rows) {
+  let best = null;
+  let bestScore = Infinity;
+  for (let col = 0; col < columns; col += 1) {
+    for (let row = 0; row < rows; row += 1) {
+      if (occupiedKeys.has(cellKey(col, row))) continue;
+      const dc = col - target.col;
+      const dr = row - target.row;
+      const score = (dc * dc + dr * dr) * 4 + (dc === 0 ? 0 : 1);
+      if (score < bestScore) {
+        bestScore = score;
+        best = { col, row };
+      }
+    }
+  }
+  return best;
 }
 
 /**

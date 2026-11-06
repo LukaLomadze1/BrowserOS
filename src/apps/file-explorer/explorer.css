@@ -239,7 +239,7 @@
 .explorer__list-header {
   flex-shrink: 0;
   display: grid;
-  grid-template-columns: 1fr 140px 100px 90px;
+  grid-template-columns: var(--explorer-details-columns, minmax(0, 1fr) 140px 100px 90px);
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-surface-glass-border);
@@ -420,7 +420,7 @@
 
 .explorer__list--details .explorer__row {
   display: grid;
-  grid-template-columns: 1fr 140px 100px 90px;
+  grid-template-columns: var(--explorer-details-columns, minmax(0, 1fr) 140px 100px 90px);
   gap: var(--space-2);
   align-items: center;
 }
@@ -477,7 +477,7 @@
   color: #ffffff;
   font-size: var(--text-xs);
   display: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-popover);
 }
 
 .explorer__row--rename-error .explorer__rename-error {
@@ -530,4 +530,9 @@
 .explorer__action-button:hover {
   background: var(--color-surface-glass-strong);
   color: var(--color-text-primary);
+}
+
+/* Column headers hidden by a File Explorer display preference. */
+.explorer__list-header-button[hidden] {
+  display: none;
 }

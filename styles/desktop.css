@@ -11,15 +11,13 @@
   flex-direction: column;
 }
 
-/* ---- Wallpaper ---- */
+/* ---- Wallpaper ----
+ * Layer geometry only; the presets themselves live in wallpapers.css.
+ */
 .desktop__wallpaper {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background:
-    radial-gradient(circle at 15% 10%, rgba(124, 108, 246, 0.25), transparent 45%),
-    radial-gradient(circle at 85% 85%, rgba(52, 226, 198, 0.18), transparent 50%),
-    linear-gradient(160deg, var(--color-bg-void-gradient-b) 0%, var(--color-bg-void-gradient-a) 65%);
 }
 
 /* ---- Icon grid ----

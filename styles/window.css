@@ -8,9 +8,9 @@
   position: absolute;
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-lg);
+  border-radius: var(--window-radius);
   overflow: hidden;
-  background: var(--color-surface-glass);
+  background: var(--color-window-bg);
   border: 1px solid var(--color-surface-glass-border);
   backdrop-filter: blur(var(--blur-glass));
   -webkit-backdrop-filter: blur(var(--blur-glass));
@@ -37,6 +37,8 @@
   display: none;
 }
 
+/* Maximized windows fill the desktop edge to edge, so they never take
+ * the user's corner radius. */
 .window--maximized {
   border-radius: 0;
 }
@@ -124,7 +126,7 @@
 .window__body {
   flex: 1;
   overflow: auto;
-  background: rgba(10, 12, 18, 0.25);
+  background: var(--color-window-body-bg);
   padding: var(--space-5);
   color: var(--color-text-primary);
   font-family: var(--font-body);
@@ -175,8 +177,6 @@
   display: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .window {
-    transition: none;
-  }
+:root[data-reduced-motion="on"] .window {
+  transition: none;
 }

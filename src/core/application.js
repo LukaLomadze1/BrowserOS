@@ -56,6 +56,17 @@ export class Application {
   }
 
   /**
+   * Called by AppManager when a singleInstance app is launched again
+   * while already running. The existing window has already been
+   * focused; `options` are the new launch's parameters, letting the
+   * app navigate to whatever the caller asked for (a deep link)
+   * instead of opening a second window. Default: ignore them.
+   * @param {object} [options] - Same shape as launch(options).
+   * @returns {void}
+   */
+  onRelaunch(options) {}
+
+  /**
    * Called once by AppManager right before the window is torn down.
    * Subclasses override this to clear timers, remove listeners, and
    * flush any unsaved state.

@@ -8,6 +8,7 @@
  */
 
 import { eventBus } from "./eventBus.js";
+import { keyboardShortcuts } from "./keyboard/keyboardShortcuts.js";
 import { WindowView } from "../components/window/window.js";
 
 const DEFAULT_MIN_WIDTH = 320;
@@ -39,6 +40,52 @@ class WindowManager {
    */
   init() {
     eventBus.on("window:requestToggleFromTaskbar", ({ id }) => this._handleTaskbarToggle(id));
+
+    // Window-management shortcuts (gated by keyboard.windowShortcuts).
+    // Each handler returns false when there is no window to act on, so
+    // the key press is left alone.
+    keyboardShortcuts.bind("window.toggleMaximize", () => this._withActiveWindow((id) => this._toggleMaximize(id)));
+    keyboardShortcuts.bind("window.minimize", () => this._withActiveWindow((id) => this.minimizeWindow(id)));
+    keyboardShortcuts.bind("window.close", () => this._withActiveWindow((id) => this.closeWindow(id)));
+    keyboardShortcuts.bind("window.next", () => this.cycleFocus("next"));
+    keyboardShortcuts.bind("window.previous", () => this.cycleFocus("previous"));
+  }
+
+  /**
+   * @returns {string|null} The focused window's id, if any.
+   */
+  getActiveWindowId() {
+    return this._activeId;
+  }
+
+  /**
+   * Keyboard window switching. "next" focuses the window lowest in the
+   * stack, so repeated presses visit every open window in turn;
+   * "previous" returns to the most recently used window beneath the
+   * active one. Minimized windows are restored when reached.
+   * @param {"next"|"previous"} direction
+   * @returns {boolean} Whether there was another window to switch to.
+   */
+  cycleFocus(direction) {
+    const ordered = [...this._windows.entries()]
+      .sort(([, a], [, b]) => Number(a.view.getElement().style.zIndex || 0) - Number(b.view.getElement().style.zIndex || 0))
+      .map(([id]) => id);
+    const others = ordered.filter((id) => id !== this._activeId);
+    if (others.length === 0) return false;
+
+    const target = direction === "next" ? others[0] : others[others.length - 1];
+    this.focusWindow(target);
+    return true;
+  }
+
+  /**
+   * @param {(id: string) => void} action
+   * @returns {boolean} False when no window is active.
+   */
+  _withActiveWindow(action) {
+    if (!this._activeId || !this._windows.has(this._activeId)) return false;
+    action(this._activeId);
+    return true;
   }
 
   /**

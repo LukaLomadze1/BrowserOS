@@ -35,9 +35,26 @@
  * divs at all). `_handleIconClick` and the marquee's pointerup
  * handler both now call `.focus()` explicitly, rather than depending
  * on any browser default.
+ *
+ * Preferences: every `desktop.*` setting is read from SettingsService
+ * and applied live through one category subscription
+ * (_applyDesktopPreferences). Icon size and grid spacing produce
+ * concrete metrics (utils/desktopMetrics.js) that are written to the
+ * icon layer's CSS custom properties *and* passed to
+ * desktopGrid.configureGrid(), so they change real positions, not just
+ * visuals. Visibility preferences (show icons, system shortcuts) only
+ * hide views — the layout and the VFS are never touched — and any
+ * hidden item is dropped from the selection, so SelectionManager stays
+ * the single source of truth for what an action like Delete affects.
+ * With "align to grid" off, layout cells may be fractional (free
+ * placement); with "auto arrange" on, icons are re-packed in sort
+ * order after every change.
  */
 
 import { createElement } from "../utils/dom.js";
+import { settingsService } from "./settings/settingsService.js";
+import { keyboardShortcuts } from "./keyboard/keyboardShortcuts.js";
+import { computeDesktopMetrics } from "../utils/desktopMetrics.js";
 import { eventBus } from "./eventBus.js";
 import { storage } from "./storage.js";
 import { SelectionManager } from "./selectionManager.js";
@@ -52,6 +69,9 @@ import {
   clampCell,
   cellKey,
   findNextFreeCell,
+  findNearestFreeCell,
+  configureGrid,
+  pixelsToCell,
 } from "../utils/desktopGrid.js";
 import { openVfsEntry } from "./vfs/vfsOpener.js";
 import { showConfirmDialog } from "../components/dialog/confirmDialog.js";
@@ -71,6 +91,12 @@ const VFS_ID_PREFIX = "vfs:";
 // still opens the item; only a deliberately paced second click renames.
 const SLOW_CLICK_MIN_MS = 450;
 const SLOW_CLICK_MAX_MS = 1000;
+
+/** Fractional layout positions are persisted with this many decimals. */
+const LAYOUT_PRECISION = 100;
+
+/** In single-click mode, a repeat click on the same icon within this window is the tail of a double-click, not a second open. */
+const SINGLE_CLICK_REPEAT_GUARD_MS = 500;
 
 class DesktopManager {
   /**
@@ -109,6 +135,8 @@ class DesktopManager {
     this._pendingCollapseId = null;
     this._lastClickId = null;
     this._lastClickTime = 0;
+    this._lastOpenedId = null;
+    this._lastOpenedTime = 0;
 
     this._marqueeEl = null;
     this._dragRafId = null;
@@ -121,14 +149,18 @@ class DesktopManager {
     this._dragOrigins = new Map();
 
     this._resizeHandler = () => this._onWindowResize();
-    this._escapeHandler = (e) => this._onGlobalKeyDown(e);
+
+    /** @type {Readonly<Record<string, *>>} Snapshot of the desktop.* settings currently applied. */
+    this._prefs = settingsService.getCategory("desktop");
+    /** @type {Array<() => void>} */
+    this._unsubscribers = [];
 
     // One shared callbacks object for every icon view — none of these
     // close over anything item-specific, they just forward the id.
     this._iconCallbacks = {
       onPointerDown: (id, options) => this._handleIconPointerDown(id, options),
       onClick: (id, options) => this._handleIconClick(id, options),
-      onOpen: (id) => this._openIcon(id),
+      onOpen: (id) => this._handleIconDoubleClick(id),
       onContextMenu: (id, x, y) => this._showIconContextMenu(id, x, y),
       onDragStart: (id) => this._handleDragStart(id),
       onDragMove: (id, dx, dy) => this._handleDragMove(id, dx, dy),
@@ -154,18 +186,134 @@ class DesktopManager {
       this._desktopFolderId = null;
     }
 
+    // Metrics must be in place before the layout is computed, since
+    // the grid's column/row counts depend on the cell size.
+    this._applyMetrics();
     this._loadLayout();
     this._renderAllIcons();
+    this._applyVisibility();
+    if (this._prefs["desktop.autoArrange"]) this._arrangeIcons();
     this._wireSelectionEvents();
     this._wireContainerEvents();
     this._wireVfsEvents();
     this._wireClipboardEvents();
     window.addEventListener("resize", this._resizeHandler);
-    // Escape must work regardless of what currently has DOM focus —
-    // a container-scoped listener only fires when focus is inside
-    // the icon grid, which isn't reliably true after clicking empty
-    // desktop space.
-    document.addEventListener("keydown", this._escapeHandler);
+    this._unsubscribers.push(
+      settingsService.subscribeCategory("desktop", (batch) => this._applyDesktopPreferences(batch)),
+      // Escape must work regardless of what currently has DOM focus —
+      // a container-scoped listener only fires when focus is inside
+      // the icon grid, which isn't reliably true after clicking empty
+      // desktop space. It's a global shortcut for that reason.
+      keyboardShortcuts.bind("desktop.clearSelection", () => this._clearSelectionFromKeyboard())
+    );
+  }
+
+  /**
+   * Detach every global listener and subscription. Intended for tests
+   * and teardown.
+   * @returns {void}
+   */
+  destroy() {
+    window.removeEventListener("resize", this._resizeHandler);
+    for (const unsubscribe of this._unsubscribers) unsubscribe();
+    this._unsubscribers = [];
+  }
+
+  // ---------------------------------------------------------------
+  // Preferences
+  // ---------------------------------------------------------------
+
+  /**
+   * React to one batch of desktop.* changes.
+   * @param {import("./settings/settingsService.js").SettingsBatch} batch
+   * @returns {void}
+   */
+  _applyDesktopPreferences(batch) {
+    const changed = new Set(batch.changes.map((change) => change.key));
+    this._prefs = settingsService.getCategory("desktop");
+
+    if (changed.has("desktop.iconSize") || changed.has("desktop.gridSpacing") || changed.has("desktop.showLabels")) {
+      this._applyMetrics();
+      this._reclampAllPositions();
+      for (const id of this._layout.keys()) this._repositionView(id);
+    }
+
+    if (changed.has("desktop.showIcons") || changed.has("desktop.showSystemShortcuts")) {
+      this._applyVisibility();
+    }
+
+    if (changed.has("desktop.alignToGrid") && this._prefs["desktop.alignToGrid"]) {
+      this._snapAllToGrid();
+    }
+
+    if (this._prefs["desktop.autoArrange"]) {
+      this._arrangeIcons();
+    } else {
+      this._saveLayout();
+    }
+
+    eventBus.emit("desktop:preferencesApplied", Object.freeze({ keys: Object.freeze([...changed]) }));
+  }
+
+  /**
+   * Write icon/grid metrics to the icon layer and the grid math.
+   * @returns {void}
+   */
+  _applyMetrics() {
+    const metrics = computeDesktopMetrics(this._prefs["desktop.iconSize"], this._prefs["desktop.gridSpacing"]);
+    const style = this._container.style;
+    style.setProperty("--icon-size", `${metrics.glyph}px`);
+    style.setProperty("--desktop-icon-glyph-font", `${metrics.glyphFont}px`);
+    style.setProperty("--desktop-icon-width", `${metrics.width}px`);
+    style.setProperty("--desktop-icon-height", `${metrics.height}px`);
+    style.setProperty("--desktop-icon-label-font", `${metrics.labelFont}px`);
+    style.setProperty("--desktop-icon-label-line-height", String(metrics.labelLineHeight));
+    style.setProperty("--desktop-icon-padding", `${metrics.paddingY}px ${metrics.paddingX}px`);
+    style.setProperty("--desktop-icon-gap", `${metrics.glyphGap}px`);
+    style.setProperty("--icon-grid-cell", `${metrics.cell}px`);
+    style.setProperty("--icon-grid-inset", `${metrics.inset}px`);
+    this._container.dataset.iconSize = this._prefs["desktop.iconSize"];
+    this._container.dataset.showLabels = this._prefs["desktop.showLabels"] ? "on" : "off";
+    configureGrid({ inset: metrics.inset, cellSize: metrics.cell });
+  }
+
+  /**
+   * Show or hide views according to the visibility preferences, and
+   * drop anything now hidden from the selection.
+   * @returns {void}
+   */
+  _applyVisibility() {
+    this._container.dataset.iconsHidden = this._prefs["desktop.showIcons"] ? "false" : "true";
+    for (const [id, view] of this._views) {
+      view.getElement().hidden = !this._isVisible(id);
+    }
+    const visibleSelection = this._selection.getSelectedIds().filter((id) => this._isVisible(id));
+    if (visibleSelection.length !== this._selection.getSelectedIds().length) {
+      this._selection.setSelection(visibleSelection);
+    }
+  }
+
+  /**
+   * @param {string} id
+   * @returns {boolean} Whether the item is currently displayed.
+   */
+  _isVisible(id) {
+    if (!this._prefs["desktop.showIcons"]) return false;
+    const shortcut = this._getShortcut(id);
+    if (shortcut && shortcut.type === "system" && !this._prefs["desktop.showSystemShortcuts"]) return false;
+    return true;
+  }
+
+  /**
+   * Change one desktop setting on behalf of a desktop context-menu
+   * action. The setting's subscription applies it, exactly as if it
+   * had been changed in Settings.
+   * @param {string} key
+   * @param {*} value
+   * @returns {void}
+   */
+  _setPreference(key, value) {
+    settingsService.set(key, value);
   }
 
   // ---------------------------------------------------------------
@@ -232,18 +380,24 @@ class DesktopManager {
     const rows = getRowCount(bounds.height || window.innerHeight);
     const columns = getColumnCount(bounds.width || window.innerWidth);
 
+    const aligned = this._prefs["desktop.alignToGrid"];
     const occupied = new Set();
     for (const compositeId of this._getAllCompositeIds()) {
       const savedPos = savedPositions[compositeId];
       let col, row;
-      if (savedPos && Number.isInteger(savedPos.col) && Number.isInteger(savedPos.row)) {
-        ({ col, row } = clampCell(savedPos.col, savedPos.row, columns, rows));
+      if (savedPos && Number.isFinite(savedPos.col) && Number.isFinite(savedPos.row)) {
+        const base = aligned ? { col: Math.round(savedPos.col), row: Math.round(savedPos.row) } : savedPos;
+        ({ col, row } = clampCell(base.col, base.row, columns, rows));
       } else {
         ({ col, row } = findNextFreeCell(occupied, rows));
       }
-      // If clamping/collision put two icons on the same cell, bump forward to the next free one.
-      while (occupied.has(cellKey(col, row))) {
-        ({ col, row } = findNextFreeCell(occupied, rows));
+      // With grid alignment, two icons may never share a cell: bump a
+      // collision forward to the next free one. Free placement allows
+      // overlap, exactly like dropping one icon onto another.
+      if (aligned) {
+        while (occupied.has(cellKey(col, row))) {
+          ({ col, row } = findNextFreeCell(occupied, rows));
+        }
       }
       occupied.add(cellKey(col, row));
       this._layout.set(compositeId, { col, row });
@@ -254,7 +408,10 @@ class DesktopManager {
   _saveLayout() {
     const positions = {};
     for (const [id, pos] of this._layout) {
-      positions[id] = { col: Math.round(pos.col), row: Math.round(pos.row) };
+      positions[id] = {
+        col: Math.round(pos.col * LAYOUT_PRECISION) / LAYOUT_PRECISION,
+        row: Math.round(pos.row * LAYOUT_PRECISION) / LAYOUT_PRECISION,
+      };
     }
     storage.set(STORAGE_KEY, { positions, sortMode: this._sortMode });
   }
@@ -273,6 +430,7 @@ class DesktopManager {
     const { col, row } = findNextFreeCell(occupied, rows);
     this._layout.set(compositeId, { col, row });
     this._repositionView(compositeId);
+    if (this._prefs["desktop.autoArrange"]) this._arrangeIcons();
   }
 
   // ---------------------------------------------------------------
@@ -296,6 +454,7 @@ class DesktopManager {
   _renderShortcutIcon(shortcut) {
     const view = new DesktopIconView({ id: shortcut.id, label: shortcut.label, icon: shortcut.icon }, this._iconCallbacks);
     this._views.set(shortcut.id, view);
+    view.getElement().hidden = !this._isVisible(shortcut.id);
     this._container.append(view.getElement());
     this._repositionView(shortcut.id);
   }
@@ -309,6 +468,7 @@ class DesktopManager {
     const icon = entry.type === "folder" ? "\u25a4" : "\u25a2";
     const view = new DesktopIconView({ id: compositeId, label: entry.name, icon }, this._iconCallbacks);
     this._views.set(compositeId, view);
+    view.getElement().hidden = !this._isVisible(compositeId);
     this._container.append(view.getElement());
     this._repositionView(compositeId);
     if (this._clipboardService?.isCut(entry.id)) view.setCut(true);
@@ -389,10 +549,35 @@ class DesktopManager {
     }
     this._pendingCollapseId = null;
 
+    if (this._prefs["desktop.openItemsWith"] === "singleClick") {
+      // A plain click opens; the slow-second-click rename gesture would
+      // be indistinguishable from opening twice, so F2 renames instead.
+      // The second click of a habitual double-click must not open the
+      // item again (multi-instance apps would get a second window).
+      const now = Date.now();
+      const isRepeat = this._lastOpenedId === id && now - this._lastOpenedTime < SINGLE_CLICK_REPEAT_GUARD_MS;
+      this._lastClickId = null;
+      this._lastOpenedId = id;
+      this._lastOpenedTime = now;
+      if (!isRepeat) this._openIcon(id);
+      return;
+    }
+
     this._maybeStartSlowClickRename(id);
 
     this._lastClickId = id;
     this._lastClickTime = Date.now();
+  }
+
+  /**
+   * @param {string} id
+   * @returns {void}
+   */
+  _handleIconDoubleClick(id) {
+    // In single-click mode the first click of the pair already opened
+    // the item; opening again would duplicate windows.
+    if (this._prefs["desktop.openItemsWith"] === "singleClick") return;
+    this._openIcon(id);
   }
 
   /**
@@ -537,6 +722,12 @@ class DesktopManager {
     const columns = getColumnCount(bounds.width);
     const rows = getRowCount(bounds.height);
 
+    if (this._prefs["desktop.autoArrange"]) {
+      this._finishAutoArrangeDrag(group, dx, dy, columns, rows);
+      return;
+    }
+
+    const aligned = this._prefs["desktop.alignToGrid"];
     const occupiedByOthers = new Set();
     for (const [id, pos] of this._layout) {
       if (!group.includes(id)) occupiedByOthers.add(cellKey(pos.col, pos.row));
@@ -549,12 +740,18 @@ class DesktopManager {
       const view = this._views.get(id);
       if (!origin || !view) continue;
 
-      const nearest = pixelsToNearestCell(origin.pixelX + dx, origin.pixelY + dy);
-      const desired = clampCell(nearest.col, nearest.row, columns, rows);
-      const desiredKey = cellKey(desired.col, desired.row);
-
-      const finalCell = claimed.has(desiredKey) ? { col: origin.col, row: origin.row } : desired;
-      claimed.add(cellKey(finalCell.col, finalCell.row));
+      let finalCell;
+      if (aligned) {
+        const nearest = pixelsToNearestCell(origin.pixelX + dx, origin.pixelY + dy);
+        const desired = clampCell(nearest.col, nearest.row, columns, rows);
+        const desiredKey = cellKey(desired.col, desired.row);
+        finalCell = claimed.has(desiredKey) ? { col: origin.col, row: origin.row } : desired;
+        claimed.add(cellKey(finalCell.col, finalCell.row));
+      } else {
+        // Free placement: keep the exact drop point (clamped on screen).
+        const exact = pixelsToCell(origin.pixelX + dx, origin.pixelY + dy);
+        finalCell = clampCell(exact.col, exact.row, columns, rows);
+      }
 
       this._layout.set(id, finalCell);
       view.setDragging(false);
@@ -569,6 +766,41 @@ class DesktopManager {
     this._sortMode = "custom";
     this._saveLayout();
 
+    this._dragGroup = [];
+    this._dragOrigins.clear();
+  }
+
+  /**
+   * Auto arrange keeps icons packed, so a drop reorders instead of
+   * placing: each dragged icon takes the packing slot under its drop
+   * point and everything else keeps its relative order.
+   * @param {string[]} group
+   * @param {number} dx
+   * @param {number} dy
+   * @param {number} columns
+   * @param {number} rows
+   * @returns {void}
+   */
+  _finishAutoArrangeDrag(group, dx, dy, columns, rows) {
+    const slotOf = (pos) => Math.round(pos.col) * rows + Math.round(pos.row);
+    const ranked = [];
+    for (const id of this._arrangeOrder()) {
+      if (group.includes(id)) continue;
+      ranked.push({ id, slot: slotOf(this._layout.get(id) ?? { col: 0, row: 0 }), dragged: 0 });
+    }
+    for (const id of group) {
+      const origin = this._dragOrigins.get(id);
+      this._views.get(id)?.setDragging(false);
+      if (!origin) continue;
+      const nearest = pixelsToNearestCell(origin.pixelX + dx, origin.pixelY + dy);
+      const drop = clampCell(nearest.col, nearest.row, columns, rows);
+      // Dragged icons sort just before the icon currently in that slot.
+      ranked.push({ id, slot: slotOf(drop), dragged: -1 });
+    }
+    ranked.sort((a, b) => a.slot - b.slot || a.dragged - b.dragged);
+
+    this._sortMode = "custom";
+    this._arrangeIcons(ranked.map((entry) => entry.id));
     this._dragGroup = [];
     this._dragOrigins.clear();
   }
@@ -597,6 +829,13 @@ class DesktopManager {
     const startY = e.clientY - containerRect.top;
     const additive = e.ctrlKey || e.metaKey;
     const preDragSelection = new Set(this._selection.getSelectedIds());
+
+    if (!this._prefs["desktop.rectangleSelection"]) {
+      // Clicking empty space still clears the selection (unless Ctrl is
+      // held); only the drag-to-select rectangle is disabled.
+      if (!additive) this._selection.clear();
+      return;
+    }
 
     this._marqueeEl = createElement("div", { className: "desktop-marquee" });
     this._container.append(this._marqueeEl);
@@ -688,6 +927,7 @@ class DesktopManager {
   _getIconsIntersecting(rectLeft, rectTop, rectWidth, rectHeight, containerRect) {
     const ids = [];
     for (const [id, view] of this._views) {
+      if (!this._isVisible(id)) continue;
       const elRect = view.getElement().getBoundingClientRect();
       const left = elRect.left - containerRect.left;
       const top = elRect.top - containerRect.top;
@@ -721,7 +961,45 @@ class DesktopManager {
    * @returns {void}
    */
   _showDesktopContextMenu(x, y) {
+    const prefs = this._prefs;
+    const iconSizeItem = (label, value) => ({
+      label,
+      checked: prefs["desktop.iconSize"] === value,
+      radio: true,
+      action: () => this._setPreference("desktop.iconSize", value),
+    });
+    const toggleItem = (label, key) => ({
+      label,
+      checked: Boolean(prefs[key]),
+      action: () => this._setPreference(key, !prefs[key]),
+    });
+
     const items = [
+      {
+        label: "View",
+        submenu: [
+          iconSizeItem("Large icons", "large"),
+          iconSizeItem("Medium icons", "medium"),
+          iconSizeItem("Small icons", "small"),
+          { separator: true },
+          toggleItem("Auto arrange icons", "desktop.autoArrange"),
+          toggleItem("Align icons to grid", "desktop.alignToGrid"),
+          { separator: true },
+          toggleItem("Show icon labels", "desktop.showLabels"),
+          toggleItem("Show desktop icons", "desktop.showIcons"),
+        ],
+      },
+      {
+        label: "Sort by",
+        submenu: [
+          { label: "Name", action: () => this._sortBy("name") },
+          { label: "Type", action: () => this._sortBy("type") },
+        ],
+      },
+      { label: "Arrange icons", action: () => this._arrangeIcons() },
+      { label: "Refresh", action: () => this._refresh() },
+      { separator: true },
+      { label: "Paste", disabled: !this._clipboardService?.hasContent(), action: () => this._pasteIntoDesktop() },
       {
         label: "New",
         submenu: [
@@ -730,23 +1008,32 @@ class DesktopManager {
         ],
       },
       { separator: true },
-      { label: "Refresh", action: () => this._refresh() },
-      { separator: true },
       {
-        label: "Sort by",
+        label: "Personalize",
         submenu: [
-          { label: "Name", action: () => this._sortBy("name") },
-          { label: "Type", action: () => this._sortBy("type") },
+          { label: "Change wallpaper\u2026", action: () => this._openSettings("wallpaper") },
+          { label: "Appearance settings\u2026", action: () => this._openSettings("appearance") },
+          { label: "Desktop settings\u2026", action: () => this._openSettings("desktop") },
         ],
       },
-      { label: "Paste", disabled: !this._clipboardService?.hasContent(), action: () => this._pasteIntoDesktop() },
-      { separator: true },
-      { label: "Personalize", disabled: true },
     ];
     this._contextMenu.show(items, { x, y }, {
       onClose: () => eventBus.emit("desktop:contextMenuClosed", { target: "desktop" }),
     });
     eventBus.emit("desktop:contextMenuOpened", { target: "desktop", x, y });
+  }
+
+  /**
+   * Open Settings on a specific page. Goes through AppManager like
+   * every other launch, so the single-instance Settings window is
+   * focused and navigated rather than duplicated.
+   * @param {string} page
+   * @returns {void}
+   */
+  _openSettings(page) {
+    this._appManager.launch("settings", { page }).catch((error) => {
+      console.error("[DesktopManager] failed to open Settings:", error);
+    });
   }
 
   /**
@@ -914,7 +1201,7 @@ class DesktopManager {
       return false;
     }
     if (trimmed === entry.name) {
-      return true; // No-op rename — just exit rename mode cleanly.
+      return true; // No-op rename \u2014 just exit rename mode cleanly.
     }
 
     try {
@@ -936,15 +1223,22 @@ class DesktopManager {
   async _deleteSelection() {
     const selected = this._selection.getSelectedIds();
     const deletableEntries = selected.map((id) => this._getVfsEntry(id)).filter(Boolean);
-    if (deletableEntries.length === 0) return; // Only shortcuts (or nothing) selected — nothing to delete.
+    if (deletableEntries.length === 0) return; // Only shortcuts (or nothing) selected \u2014 nothing to delete.
 
-    const needsConfirmation = deletableEntries.length > 1 || (await this._anyNonEmptyFolder(deletableEntries));
+    const confirmMode = this._prefs["desktop.confirmTrash"];
+    const isNonEmptyFolder = deletableEntries.length === 1 && (await this._anyNonEmptyFolder(deletableEntries));
+    const needsConfirmation =
+      confirmMode === "always" || (confirmMode === "smart" && (deletableEntries.length > 1 || isNonEmptyFolder));
 
     if (needsConfirmation) {
-      const message =
-        deletableEntries.length > 1
-          ? `Move ${deletableEntries.length} items to Trash?`
-          : `"${deletableEntries[0].name}" is not empty. Move it and everything inside to Trash?`;
+      let message;
+      if (deletableEntries.length > 1) {
+        message = `Move ${deletableEntries.length} items to Trash?`;
+      } else if (isNonEmptyFolder) {
+        message = `"${deletableEntries[0].name}" is not empty. Move it and everything inside to Trash?`;
+      } else {
+        message = `Move "${deletableEntries[0].name}" to Trash?`;
+      }
       const confirmed = await showConfirmDialog({
         title: "Delete",
         message,
@@ -1075,7 +1369,9 @@ class DesktopManager {
 
     const compositeId = this._vfsCompositeId(entry.id);
     this._views.get(compositeId)?.setLabel(entry.name);
-    // Position is deliberately untouched — renaming must not move the icon.
+    // Position is deliberately untouched — renaming must not move the
+    // icon — unless auto arrange is keeping the desktop sorted.
+    if (this._prefs["desktop.autoArrange"] && this._sortMode !== "custom") this._arrangeIcons();
 
     eventBus.emit("desktop:itemRenamed", { id: compositeId, name: entry.name, previousName: previous?.name ?? null });
   }
@@ -1103,7 +1399,7 @@ class DesktopManager {
 
     this._renderVfsIcon(entry);
     this._assignPositionIfMissing(compositeId);
-    this._saveLayout();
+    if (!this._prefs["desktop.autoArrange"]) this._saveLayout();
 
     eventBus.emit("desktop:itemCreated", {
       id: compositeId,
@@ -1129,7 +1425,11 @@ class DesktopManager {
     }
     this._layout.delete(compositeId); // Releases the grid cell for reuse.
     this._selection.setSelection(new Set(this._selection.getSelectedIds().filter((id) => id !== compositeId)));
-    this._saveLayout();
+    if (this._prefs["desktop.autoArrange"]) {
+      this._arrangeIcons();
+    } else {
+      this._saveLayout();
+    }
 
     eventBus.emit("desktop:itemDeleted", { id: compositeId, name: removedEntry?.name ?? null });
   }
@@ -1148,47 +1448,40 @@ class DesktopManager {
    * @returns {void}
    */
   _onContainerKeyDown(e) {
-    const key = e.key.toLowerCase();
-    if ((e.ctrlKey || e.metaKey) && key === "c") {
+    // Inline rename inputs live inside the icon layer; their keys are
+    // text editing, never desktop shortcuts.
+    if (keyboardShortcuts.isEditableTarget(e.target)) return;
+    const shortcut = (id) => keyboardShortcuts.matches(e, id);
+
+    if (shortcut("desktop.selectAll")) {
+      e.preventDefault();
+      this._selection.setSelection(this._getAllCompositeIds().filter((id) => this._isVisible(id)));
+    } else if (shortcut("desktop.copy")) {
       e.preventDefault();
       this._copySelection();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && key === "x") {
+    } else if (shortcut("desktop.cut")) {
       e.preventDefault();
       this._cutSelection();
-      return;
-    }
-    if ((e.ctrlKey || e.metaKey) && key === "v") {
+    } else if (shortcut("desktop.paste")) {
       e.preventDefault();
       this._pasteIntoDesktop();
-      return;
-    }
-
-    switch (e.key) {
-      case "ArrowUp":
-      case "ArrowDown":
-      case "ArrowLeft":
-      case "ArrowRight":
+    } else if (shortcut("desktop.refresh")) {
+      e.preventDefault();
+      this._refresh();
+    } else if (shortcut("desktop.navigate")) {
+      e.preventDefault();
+      this._moveFocus(e.key);
+    } else if (shortcut("desktop.open")) {
+      if (this._focusedId) {
         e.preventDefault();
-        this._moveFocus(e.key);
-        break;
-      case "Enter":
-        if (this._focusedId) {
-          e.preventDefault();
-          this._openIcon(this._focusedId);
-        }
-        break;
-      case "F2":
-        e.preventDefault();
-        this._tryStartRenameFromSelection();
-        break;
-      case "Delete":
-        e.preventDefault();
-        this._deleteSelection();
-        break;
-      default:
-        break;
+        this._openIcon(this._focusedId);
+      }
+    } else if (shortcut("desktop.rename")) {
+      e.preventDefault();
+      this._tryStartRenameFromSelection();
+    } else if (shortcut("desktop.delete")) {
+      e.preventDefault();
+      this._deleteSelection();
     }
   }
 
@@ -1205,19 +1498,16 @@ class DesktopManager {
   }
 
   /**
-   * Document-level handler, scoped to only ever act on Escape, so it
-   * can't interfere with typing inside app windows. Clears selection
-   * reliably regardless of what currently has focus, and prevents
-   * the default browser action that would otherwise produce a stray
-   * focus outline.
-   * @param {KeyboardEvent} e
-   * @returns {void}
+   * Bound to the global "desktop.clearSelection" shortcut (Escape).
+   * Clears selection reliably regardless of what currently has focus.
+   * Returning false when nothing is selected leaves the key unhandled
+   * for anything else that wants it.
+   * @returns {boolean}
    */
-  _onGlobalKeyDown(e) {
-    if (e.key !== "Escape") return;
-    if (this._selection.getSelectedIds().length === 0) return;
-    e.preventDefault();
+  _clearSelectionFromKeyboard() {
+    if (this._selection.getSelectedIds().length === 0) return false;
     this._selection.clear();
+    return true;
   }
 
   /**
@@ -1225,7 +1515,8 @@ class DesktopManager {
    * @returns {void}
    */
   _moveFocus(direction) {
-    const currentId = this._focusedId ?? this._getAllCompositeIds()[0];
+    const firstVisible = this._getAllCompositeIds().find((id) => this._isVisible(id));
+    const currentId = this._focusedId && this._isVisible(this._focusedId) ? this._focusedId : firstVisible;
     if (!currentId) return;
     const nextId = this._findNextIconInDirection(currentId, direction) ?? currentId;
     const view = this._views.get(nextId);
@@ -1250,7 +1541,7 @@ class DesktopManager {
     let bestScore = Infinity;
 
     for (const [id, pos] of this._layout) {
-      if (id === currentId) continue;
+      if (id === currentId || !this._isVisible(id)) continue;
       let primary;
       let secondary;
 
@@ -1322,25 +1613,63 @@ class DesktopManager {
   }
 
   /**
-   * Reclamp every icon's stored cell into the current viewport
-   * bounds, without touching the VFS at all. Used after a window
-   * resize — recomputing layout is cheap and purely local; it must
-   * never trigger a VFS read (that's what "Refresh" is for).
+   * Fit every icon into the current grid bounds, without touching the
+   * VFS at all. Used after a window resize or browser zoom (both shrink
+   * or grow the desktop in CSS pixels) and after icon metrics change —
+   * recomputing layout is cheap and purely local; it must never
+   * trigger a VFS read (that's what "Refresh" is for).
+   *
+   * Icons that still fit keep their cells. With grid alignment, icons
+   * that no longer fit — or that collide — move to the nearest free
+   * cell, so shrinking the desktop never stacks icons on one cell.
+   * Earlier icons (in column-major reading order) keep priority. Only
+   * when every visible cell is taken do the remaining icons continue
+   * past the edge, as a desktop with more icons than cells must. With
+   * free placement, out-of-bounds icons are simply clamped on screen.
    * @returns {boolean} Whether anything actually moved.
    */
   _reclampAllPositions() {
     const bounds = this._container.getBoundingClientRect();
     const columns = getColumnCount(bounds.width);
     const rows = getRowCount(bounds.height);
+    const aligned = this._prefs["desktop.alignToGrid"];
     let changed = false;
 
-    for (const [compositeId, pos] of this._layout) {
-      const clamped = clampCell(pos.col, pos.row, columns, rows);
-      if (clamped.col !== pos.col || clamped.row !== pos.row) {
-        this._layout.set(compositeId, clamped);
-        this._repositionView(compositeId);
-        changed = true;
+    const move = (compositeId, cell) => {
+      this._layout.set(compositeId, cell);
+      this._repositionView(compositeId);
+      changed = true;
+    };
+
+    const ordered = [...this._layout.entries()].sort(
+      ([, a], [, b]) => Math.round(a.col) - Math.round(b.col) || a.row - b.row
+    );
+
+    if (!aligned) {
+      for (const [compositeId, pos] of ordered) {
+        const clamped = clampCell(pos.col, pos.row, columns, rows);
+        if (clamped.col !== pos.col || clamped.row !== pos.row) move(compositeId, clamped);
       }
+      return changed;
+    }
+
+    const occupied = new Set();
+    const displaced = [];
+    for (const [compositeId, pos] of ordered) {
+      const inBounds = pos.col >= 0 && pos.col < columns && pos.row >= 0 && pos.row < rows;
+      const key = cellKey(pos.col, pos.row);
+      if (inBounds && Number.isInteger(pos.col) && Number.isInteger(pos.row) && !occupied.has(key)) {
+        occupied.add(key);
+      } else {
+        displaced.push([compositeId, clampCell(Math.round(pos.col), Math.round(pos.row), columns, rows)]);
+      }
+    }
+
+    for (const [compositeId, target] of displaced) {
+      const cell = findNearestFreeCell(target, occupied, columns, rows) ?? findNextFreeCell(occupied, rows);
+      occupied.add(cellKey(cell.col, cell.row));
+      const current = this._layout.get(compositeId);
+      if (current.col !== cell.col || current.row !== cell.row) move(compositeId, cell);
     }
     return changed;
   }
@@ -1350,33 +1679,84 @@ class DesktopManager {
    * @returns {void}
    */
   _sortBy(mode) {
+    this._sortMode = mode;
+    this._arrangeIcons();
+  }
+
+  /**
+   * @returns {string[]} Every composite id in arrangement order: sorted by
+   *   the current sort mode, or (in custom mode) in column-major reading
+   *   order of the current layout.
+   */
+  _arrangeOrder() {
+    const ids = this._getAllCompositeIds();
+    if (this._sortMode === "name" || this._sortMode === "type") {
+      const items = ids.map((compositeId) => {
+        const shortcut = this._getShortcut(compositeId);
+        if (shortcut) return { compositeId, name: shortcut.label, type: "application" };
+        const entry = this._getVfsEntry(compositeId);
+        return { compositeId, name: entry.name, type: entry.type === "folder" ? "folder" : entry.extension ?? "file" };
+      });
+      items.sort((a, b) => {
+        if (this._sortMode === "type") {
+          const typeCompare = a.type.localeCompare(b.type);
+          if (typeCompare !== 0) return typeCompare;
+        }
+        return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      });
+      return items.map((item) => item.compositeId);
+    }
+    const positionOf = (id) => this._layout.get(id) ?? { col: Infinity, row: Infinity };
+    return [...ids].sort((a, b) => {
+      const pa = positionOf(a);
+      const pb = positionOf(b);
+      return Math.round(pa.col) - Math.round(pb.col) || pa.row - pb.row || pa.col - pb.col;
+    });
+  }
+
+  /**
+   * Pack icons into columns (top to bottom, then left to right).
+   * Visible icons are packed first so hidden ones never leave gaps;
+   * hidden icons keep cells after them, so showing them again never
+   * collides.
+   * @param {string[]} [order] - Explicit order; defaults to _arrangeOrder().
+   * @returns {void}
+   */
+  _arrangeIcons(order = this._arrangeOrder()) {
     const bounds = this._container.getBoundingClientRect();
-    const rows = getRowCount(bounds.height);
+    const rows = getRowCount(bounds.height || window.innerHeight);
+    const visible = order.filter((id) => this._isVisible(id));
+    const hidden = order.filter((id) => !this._isVisible(id));
 
-    const items = this._getAllCompositeIds().map((compositeId) => {
-      const shortcut = this._getShortcut(compositeId);
-      if (shortcut) return { compositeId, name: shortcut.label, type: "application" };
-      const entry = this._getVfsEntry(compositeId);
-      return { compositeId, name: entry.name, type: entry.type === "folder" ? "folder" : entry.extension ?? "file" };
-    });
-
-    items.sort((a, b) => {
-      if (mode === "type") {
-        const typeCompare = a.type.localeCompare(b.type);
-        if (typeCompare !== 0) return typeCompare;
-      }
-      return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-    });
-
-    items.forEach(({ compositeId }, index) => {
-      const col = Math.floor(index / rows);
-      const row = index % rows;
-      this._layout.set(compositeId, { col, row });
+    [...visible, ...hidden].forEach((compositeId, index) => {
+      this._layout.set(compositeId, { col: Math.floor(index / rows), row: index % rows });
       this._repositionView(compositeId);
     });
 
-    this._sortMode = mode;
     this._saveLayout();
+    eventBus.emit("desktop:iconsArranged", Object.freeze({ sortMode: this._sortMode }));
+  }
+
+  /**
+   * Snap every icon to its nearest free cell, in reading order. Used
+   * when "align to grid" is switched back on after free placement.
+   * @returns {void}
+   */
+  _snapAllToGrid() {
+    const bounds = this._container.getBoundingClientRect();
+    const columns = getColumnCount(bounds.width);
+    const rows = getRowCount(bounds.height);
+    const occupied = new Set();
+
+    for (const id of this._arrangeOrder()) {
+      const pos = this._layout.get(id);
+      if (!pos) continue;
+      let cell = clampCell(Math.round(pos.col), Math.round(pos.row), columns, rows);
+      if (occupied.has(cellKey(cell.col, cell.row))) cell = findNextFreeCell(occupied, rows);
+      occupied.add(cellKey(cell.col, cell.row));
+      this._layout.set(id, cell);
+      this._repositionView(id);
+    }
   }
 
   // ---------------------------------------------------------------
@@ -1387,7 +1767,11 @@ class DesktopManager {
   _onWindowResize() {
     if (this._resizeTimeoutId !== null) window.clearTimeout(this._resizeTimeoutId);
     this._resizeTimeoutId = window.setTimeout(() => {
-      if (this._reclampAllPositions()) this._saveLayout();
+      if (this._prefs["desktop.autoArrange"]) {
+        this._arrangeIcons();
+      } else if (this._reclampAllPositions()) {
+        this._saveLayout();
+      }
     }, RESIZE_DEBOUNCE_MS);
   }
 }

@@ -33,10 +33,23 @@
  * `_handleItemClick` and `_startMarquee`'s pointerup now explicitly
  * focus the appropriate row, rather than relying on any native
  * default.
+ *
+ * Preferences: view mode, display options, sorting, startup location,
+ * folder-opening behavior, and delete confirmation all come from the
+ * `fileExplorer` settings category. Every Explorer window subscribes
+ * to that category and re-renders in place when it changes — the
+ * current folder, history, and selection are kept — so all open
+ * windows stay synchronized and new windows start from the same
+ * values. The toolbar view buttons and Details column headers change
+ * the shared settings rather than per-window state. Display options
+ * never alter the VFS: hiding extensions only changes the rendered
+ * label, and rename fields always show the real name.
  */
 
 import { eventBus } from "../../core/eventBus.js";
 import { storage } from "../../core/storage.js";
+import { settingsService } from "../../core/settings/settingsService.js";
+import { keyboardShortcuts } from "../../core/keyboard/keyboardShortcuts.js";
 import { createElement } from "../../utils/dom.js";
 import { ExplorerView } from "./explorerView.js";
 import { ContextMenu } from "../../components/context-menu/contextMenu.js";
@@ -52,8 +65,18 @@ const HOME_PATH = "home://";
 const FAVORITES_PATH = "favorites://";
 const MAX_BREADCRUMB_SEGMENTS = 5;
 const SEARCH_DEBOUNCE_MS = 300;
-const VIEW_MODE_STORAGE_KEY = "explorer:viewMode";
-const SORT_STORAGE_KEY = "explorer:sort";
+/** Navigation state (not a preference): the last location any Explorer window showed. */
+const LAST_LOCATION_STORAGE_KEY = "explorer:lastLocation";
+/** How many recent files the Home view lists. */
+const HOME_RECENT_LIMIT = 10;
+
+/** fileExplorer.startupLocation values that map to a fixed location. */
+const STARTUP_PATHS = Object.freeze({
+  home: HOME_PATH,
+  desktop: "/Desktop",
+  documents: "/Documents",
+  downloads: "/Downloads",
+});
 
 const SIDEBAR_LOCATIONS = [
   { key: "home", label: "Home", path: HOME_PATH, icon: "\u2302" },
@@ -93,7 +116,7 @@ class ExplorerManager {
       onCut: () => this._cutSelection(),
       onPaste: () => this._pasteIntoCurrentFolder(),
       onDelete: () => this._deleteSelection(),
-      onViewModeChange: (mode) => this._setViewMode(mode),
+      onViewModeChange: (mode) => settingsService.set("fileExplorer.defaultView", mode),
       onSortChange: (field) => this._setSortField(field),
       onAddressToggle: () => this._toggleAddressMode(),
       onAddressSubmit: (value) => this._submitAddress(value),
@@ -109,8 +132,10 @@ class ExplorerManager {
     this._history = [];
     this._historyIndex = -1;
 
-    this._viewMode = storage.get(VIEW_MODE_STORAGE_KEY, "grid");
-    this._sort = storage.get(SORT_STORAGE_KEY, { field: "name", direction: "asc" });
+    /** @type {Readonly<Record<string, *>>} Snapshot of the fileExplorer.* settings currently applied. */
+    this._prefs = settingsService.getCategory("fileExplorer");
+    this._viewMode = this._prefs["fileExplorer.defaultView"];
+    this._sort = { field: this._prefs["fileExplorer.sortField"], direction: this._prefs["fileExplorer.sortDirection"] };
 
     /** @type {Set<string>} */
     this._selection = new Set();
@@ -131,6 +156,7 @@ class ExplorerManager {
     this._eventUnsubscribers = [];
 
     this._view.setViewMode(this._viewMode);
+    this._view.setColumnVisibility(this._getColumnVisibility());
   }
 
   /** @returns {HTMLElement} */
@@ -145,9 +171,117 @@ class ExplorerManager {
   async init(initialPath) {
     this._wireContainerEvents();
     this._wireVfsEvents();
+    this._eventUnsubscribers.push(
+      settingsService.subscribeCategory("fileExplorer", (batch) => this._applyPreferences(batch))
+    );
     this._renderSidebar();
     this._updateSortIndicators();
-    await this.navigate(initialPath ?? HOME_PATH, { pushHistory: true });
+    const startPath = initialPath ?? (await this._resolveStartupPath());
+    await this.navigate(startPath, { pushHistory: true });
+  }
+
+  /**
+   * Where a window opened without an explicit path starts: the last
+   * visited location (if that preference is on and it still exists),
+   * otherwise the configured startup location (if it still exists),
+   * otherwise Home.
+   * @returns {Promise<string>}
+   */
+  async _resolveStartupPath() {
+    const candidates = [];
+    if (this._prefs["fileExplorer.restoreLastLocation"]) {
+      const last = storage.get(LAST_LOCATION_STORAGE_KEY, null);
+      if (typeof last === "string") candidates.push(last);
+    }
+    const startup = this._prefs["fileExplorer.startupLocation"];
+    candidates.push(startup === "custom" ? this._prefs["fileExplorer.customStartupPath"] : STARTUP_PATHS[startup]);
+
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (candidate === HOME_PATH || candidate === FAVORITES_PATH) return candidate;
+      try {
+        const info = await this._vfs.getInfo(candidate);
+        if (info.type === "folder" && !this._isInTrash(info.path)) return info.path;
+      } catch {
+        // Missing or unreadable — try the next candidate.
+      }
+    }
+    return HOME_PATH;
+  }
+
+  /**
+   * @param {string} path
+   * @returns {boolean}
+   */
+  _isInTrash(path) {
+    return path === "/Trash" || path.startsWith("/Trash/");
+  }
+
+  // ---------------------------------------------------------------
+  // Preferences
+  // ---------------------------------------------------------------
+
+  /**
+   * Apply one batch of fileExplorer.* changes to this window without
+   * leaving the current folder.
+   * @param {import("../../core/settings/settingsService.js").SettingsBatch} batch
+   * @returns {void}
+   */
+  _applyPreferences(batch) {
+    const changed = new Set(batch.changes.map((change) => change.key));
+    this._prefs = settingsService.getCategory("fileExplorer");
+
+    if (changed.has("fileExplorer.defaultView")) {
+      this._viewMode = this._prefs["fileExplorer.defaultView"];
+      this._view.setViewMode(this._viewMode);
+    }
+    if (changed.has("fileExplorer.sortField") || changed.has("fileExplorer.sortDirection")) {
+      this._sort = { field: this._prefs["fileExplorer.sortField"], direction: this._prefs["fileExplorer.sortDirection"] };
+      this._updateSortIndicators();
+    }
+    this._view.setColumnVisibility(this._getColumnVisibility());
+
+    if (this._path === HOME_PATH) return; // Home has its own fixed layout.
+
+    if (changed.has("fileExplorer.showHiddenFiles")) {
+      // Hidden entries were filtered out of _items, so they must be
+      // re-read from the VFS rather than re-sorted.
+      if (this._searchActive) {
+        this._executeSearch();
+      } else if (this._path === FAVORITES_PATH) {
+        this._renderFavorites();
+      } else {
+        this._renderFolder({ preserveSelection: true });
+      }
+      return;
+    }
+
+    const resorts = ["fileExplorer.sortField", "fileExplorer.sortDirection", "fileExplorer.foldersFirst"];
+    if (resorts.some((key) => changed.has(key))) this._items = this._sortItems(this._items);
+    this._renderItemsList();
+  }
+
+  /**
+   * @returns {{size: boolean, modified: boolean, type: boolean}}
+   */
+  _getColumnVisibility() {
+    return {
+      size: this._prefs["fileExplorer.showSize"],
+      modified: this._prefs["fileExplorer.showModified"],
+      type: this._prefs["fileExplorer.showType"],
+    };
+  }
+
+  /**
+   * @param {object} entry
+   * @returns {string} The name to render, honoring the extension preference.
+   */
+  _displayName(entry) {
+    if (this._prefs["fileExplorer.showExtensions"] || entry.type === "folder" || !entry.extension) return entry.name;
+    const suffix = `.${entry.extension}`;
+    // Dotfiles like ".profile" have no stem to show without the extension.
+    if (!entry.name.toLowerCase().endsWith(suffix.toLowerCase()) || entry.name.length === suffix.length) return entry.name;
+    return entry.name.slice(0, -suffix.length);
   }
 
   /**
@@ -206,6 +340,7 @@ class ExplorerManager {
     }
 
     this._refreshChrome();
+    storage.set(LAST_LOCATION_STORAGE_KEY, path);
     await this._renderCurrentLocation();
 
     eventBus.emit("explorer:navigated", { path });
@@ -292,7 +427,10 @@ class ExplorerManager {
   /** @returns {Promise<void>} */
   async _renderHome() {
     this._view.showLoading();
-    const [recentFiles, favorites] = await Promise.all([this._recentFilesService.reconcile(), this._loadFavorites()]);
+    const [recentFiles, favorites] = await Promise.all([
+      this._recentFilesService.reconcile().then((all) => all.slice(0, HOME_RECENT_LIMIT)),
+      this._loadFavorites(),
+    ]);
     this._view.renderHome(recentFiles, favorites, { onOpenPath: (path) => this._openPath(path) });
     this._view.setStatus(`${recentFiles.length} recent file${recentFiles.length === 1 ? "" : "s"}`);
   }
@@ -308,7 +446,10 @@ class ExplorerManager {
    */
   async _refreshHomeIfActive() {
     if (this._path !== HOME_PATH) return;
-    const [recentFiles, favorites] = await Promise.all([this._recentFilesService.reconcile(), this._loadFavorites()]);
+    const [recentFiles, favorites] = await Promise.all([
+      this._recentFilesService.reconcile().then((all) => all.slice(0, HOME_RECENT_LIMIT)),
+      this._loadFavorites(),
+    ]);
     this._view.renderHome(recentFiles, favorites, { onOpenPath: (path) => this._openPath(path) });
     this._view.setStatus(`${recentFiles.length} recent file${recentFiles.length === 1 ? "" : "s"}`);
   }
@@ -359,6 +500,10 @@ class ExplorerManager {
     }
 
     this._items = this._sortItems(children);
+    const visibleIds = new Set(this._items.map((entry) => entry.id));
+    for (const id of [...this._selection]) {
+      if (!visibleIds.has(id)) this._selection.delete(id);
+    }
     this._renderItemsList();
   }
 
@@ -368,6 +513,7 @@ class ExplorerManager {
       ...entry,
       _selected: this._selection.has(entry.id),
       _cut: this._clipboardService.isCut(entry.id),
+      _displayName: this._displayName(entry),
       _typeLabel: entry.type === "folder" ? "Folder" : entry.extension ? `${entry.extension.toUpperCase()} File` : "File",
       _sizeLabel: entry.type === "folder" ? "" : formatBytes(entry.size),
       _modifiedLabel: formatDate(entry.modifiedAt),
@@ -404,25 +550,42 @@ class ExplorerManager {
    * @param {object[]} items
    * @returns {object[]}
    */
+  /**
+   * Filter (hidden entries, per preference) and sort a list of entries.
+   * Every path that sets `_items` goes through here, so the hidden-file
+   * preference applies uniformly to folders, search results, and live
+   * VFS updates.
+   * @param {object[]} items
+   * @returns {object[]}
+   */
   _sortItems(items) {
     const { field, direction } = this._sort;
     const multiplier = direction === "desc" ? -1 : 1;
-    return [...items].sort((a, b) => {
-      if ((a.type === "folder") !== (b.type === "folder")) return a.type === "folder" ? -1 : 1;
-      let cmp = 0;
-      if (field === "name") {
-        cmp = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      } else if (field === "type") {
-        const aType = a.type === "folder" ? "" : (a.extension ?? "");
-        const bType = b.type === "folder" ? "" : (b.extension ?? "");
-        cmp = aType.localeCompare(bType, undefined, { sensitivity: "base" });
-      } else if (field === "modified") {
-        cmp = a.modifiedAt - b.modifiedAt;
-      } else if (field === "size") {
-        cmp = a.size - b.size;
-      }
-      return cmp * multiplier;
-    });
+    const foldersFirst = this._prefs["fileExplorer.foldersFirst"];
+    const showHidden = this._prefs["fileExplorer.showHiddenFiles"];
+    const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+
+    return items
+      .filter((entry) => showHidden || !entry.hidden)
+      .sort((a, b) => {
+        if (foldersFirst && (a.type === "folder") !== (b.type === "folder")) return a.type === "folder" ? -1 : 1;
+        let cmp = 0;
+        if (field === "name") {
+          cmp = byName(a, b);
+        } else if (field === "type") {
+          const aType = a.type === "folder" ? "" : (a.extension ?? "");
+          const bType = b.type === "folder" ? "" : (b.extension ?? "");
+          cmp = aType.localeCompare(bType, undefined, { sensitivity: "base" });
+        } else if (field === "modified") {
+          cmp = a.modifiedAt - b.modifiedAt;
+        } else if (field === "created") {
+          cmp = (a.createdAt ?? 0) - (b.createdAt ?? 0);
+        } else if (field === "size") {
+          cmp = (a.type === "folder" ? 0 : a.size) - (b.type === "folder" ? 0 : b.size);
+        }
+        // Ties fall back to name so the order is always stable.
+        return (cmp || byName(a, b)) * (cmp ? multiplier : 1);
+      });
   }
 
   /**
@@ -430,15 +593,20 @@ class ExplorerManager {
    * @returns {void}
    */
   _setSortField(field) {
-    this._sort = this._sort.field === field
-      ? { field, direction: this._sort.direction === "asc" ? "desc" : "asc" }
-      : { field, direction: "asc" };
-    storage.set(SORT_STORAGE_KEY, this._sort);
-    this._updateSortIndicators();
-    if (!this._searchActive && this._path !== HOME_PATH) {
-      this._items = this._sortItems(this._items);
-      this._renderItemsList();
-    }
+    // Clicking the active column flips direction; a new column starts
+    // ascending. Both values change in one settings batch, so every
+    // Explorer window re-sorts exactly once.
+    const direction = this._sort.field === field && this._sort.direction === "asc" ? "desc" : "asc";
+    settingsService.setMany({ "fileExplorer.sortField": field, "fileExplorer.sortDirection": direction });
+  }
+
+  /**
+   * @param {"name"|"modified"|"created"|"size"|"type"} field
+   * @param {"asc"|"desc"} [direction]
+   * @returns {void}
+   */
+  _sortBy(field, direction = this._sort.direction) {
+    settingsService.setMany({ "fileExplorer.sortField": field, "fileExplorer.sortDirection": direction });
   }
 
   /** @returns {void} */
@@ -448,17 +616,6 @@ class ExplorerManager {
       direction: this._sort.field === key ? this._sort.direction : null,
     }));
     this._view.setSortIndicators(columns);
-  }
-
-  /**
-   * @param {"grid"|"list"|"details"} mode
-   * @returns {void}
-   */
-  _setViewMode(mode) {
-    this._viewMode = mode;
-    storage.set(VIEW_MODE_STORAGE_KEY, mode);
-    this._view.setViewMode(mode);
-    if (!this._searchActive && this._path !== HOME_PATH) this._renderItemsList();
   }
 
   // ---------------------------------------------------------------
@@ -523,6 +680,9 @@ class ExplorerManager {
     container.addEventListener("pointerdown", (e) => this._onContainerPointerDown(e));
     container.addEventListener("contextmenu", (e) => this._onContainerContextMenu(e));
     container.addEventListener("keydown", (e) => this._onContainerKeyDown(e));
+    // Listeners on this window's own elements need no explicit cleanup:
+    // they are collected with the window's DOM when it closes.
+    this._view.getElement().addEventListener("keydown", (e) => this._onRootKeyDown(e));
   }
 
   /**
@@ -648,44 +808,77 @@ class ExplorerManager {
    * @returns {void}
    */
   _onContainerKeyDown(e) {
-    const key = e.key.toLowerCase();
-    if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+    // Inline rename inputs live inside the list; their keys are text
+    // editing, never Explorer shortcuts.
+    if (keyboardShortcuts.isEditableTarget(e.target)) return;
+    const shortcut = (id) => keyboardShortcuts.matches(e, id);
+
+    if (shortcut("fileExplorer.up")) {
       e.preventDefault();
-      this._moveFocus(1);
-    } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+      this.goUp();
+    } else if (shortcut("fileExplorer.selectAll")) {
       e.preventDefault();
-      this._moveFocus(-1);
-    } else if (e.key === "Enter") {
+      this._selection = new Set(this._items.map((entry) => entry.id));
+      this._applySelectionToRows();
+      this._updateStatus();
+    } else if (shortcut("fileExplorer.copy")) {
+      e.preventDefault();
+      this._copySelection();
+    } else if (shortcut("fileExplorer.cut")) {
+      e.preventDefault();
+      this._cutSelection();
+    } else if (shortcut("fileExplorer.paste")) {
+      e.preventDefault();
+      this._pasteIntoCurrentFolder();
+    } else if (shortcut("fileExplorer.navigate")) {
+      e.preventDefault();
+      this._moveFocus(e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : -1);
+    } else if (shortcut("fileExplorer.open")) {
       const id = document.activeElement?.dataset?.entryId;
       if (id) {
         e.preventDefault();
         this._openItem(id);
       }
-    } else if (e.key === "F2") {
+    } else if (shortcut("fileExplorer.rename")) {
       e.preventDefault();
       if (this._selection.size === 1) this._startRename([...this._selection][0]);
-    } else if (e.key === "Delete") {
+    } else if (shortcut("fileExplorer.delete")) {
       e.preventDefault();
       this._deleteSelection();
-    } else if (e.key === "Escape") {
+    } else if (shortcut("fileExplorer.clearSelection")) {
       this._selection.clear();
       this._applySelectionToRows();
       this._updateStatus();
-    } else if ((e.ctrlKey || e.metaKey) && key === "a") {
-      e.preventDefault();
-      this._selection = new Set(this._items.map((entry) => entry.id));
-      this._applySelectionToRows();
-      this._updateStatus();
-    } else if ((e.ctrlKey || e.metaKey) && key === "c") {
-      e.preventDefault();
-      this._copySelection();
-    } else if ((e.ctrlKey || e.metaKey) && key === "x") {
-      e.preventDefault();
-      this._cutSelection();
-    } else if ((e.ctrlKey || e.metaKey) && key === "v") {
-      e.preventDefault();
-      this._pasteIntoCurrentFolder();
     }
+  }
+
+  /**
+   * Window-wide Explorer shortcuts: these work wherever focus is inside
+   * this Explorer window (sidebar, toolbar, list), not only in the list.
+   * @param {KeyboardEvent} e
+   * @returns {void}
+   */
+  _onRootKeyDown(e) {
+    if (e.defaultPrevented) return;
+    const editable = keyboardShortcuts.isEditableTarget(e.target);
+
+    if (keyboardShortcuts.matches(e, "fileExplorer.focusAddress")) {
+      e.preventDefault();
+      this._focusAddressBar();
+    } else if (keyboardShortcuts.matches(e, "fileExplorer.refresh")) {
+      e.preventDefault();
+      this.refresh();
+    } else if (!editable && keyboardShortcuts.matches(e, "fileExplorer.newFolder")) {
+      e.preventDefault();
+      this._createNewFolder();
+    }
+  }
+
+  /** @returns {void} */
+  _focusAddressBar() {
+    if (this._path === HOME_PATH || this._path === FAVORITES_PATH) return;
+    this._addressEditing = true;
+    this._view.setAddressMode("editing", this._path);
   }
 
   /**
@@ -725,7 +918,7 @@ class ExplorerManager {
     eventBus.emit("explorer:itemOpened", { id: entry.id, path: entry.path, kind: entry.type });
 
     if (entry.type === "folder") {
-      await this.navigate(entry.path);
+      await this._openFolder(entry.path);
       return;
     }
     try {
@@ -743,7 +936,7 @@ class ExplorerManager {
     try {
       const info = await this._vfs.getInfo(path);
       if (info.type === "folder") {
-        await this.navigate(path);
+        await this._openFolder(path);
       } else {
         await openVfsEntry(info, { appManager: this._appManager, recentFilesService: this._recentFilesService });
       }
@@ -758,6 +951,21 @@ class ExplorerManager {
    */
   async _openInNewWindow(path) {
     await this._appManager.launch("file-explorer", { path });
+  }
+
+  /**
+   * Open a folder the user activated, honoring fileExplorer.openFoldersIn.
+   * Navigation controls (sidebar, breadcrumbs, Back/Up) always stay in
+   * the same window.
+   * @param {string} path
+   * @returns {Promise<void>}
+   */
+  async _openFolder(path) {
+    if (this._prefs["fileExplorer.openFoldersIn"] === "newWindow") {
+      await this._openInNewWindow(path);
+      return;
+    }
+    await this.navigate(path);
   }
 
   // ---------------------------------------------------------------
@@ -866,12 +1074,19 @@ class ExplorerManager {
     const entries = this._items.filter((item) => this._selection.has(item.id));
     if (entries.length === 0) return;
 
-    const needsConfirmation = entries.length > 1 || (await this._anyNonEmptyFolder(entries));
+    const confirmMode = this._prefs["fileExplorer.confirmTrash"];
+    const isNonEmptyFolder = entries.length === 1 && (await this._anyNonEmptyFolder(entries));
+    const needsConfirmation =
+      confirmMode === "always" || (confirmMode === "smart" && (entries.length > 1 || isNonEmptyFolder));
     if (needsConfirmation) {
-      const message =
-        entries.length > 1
-          ? `Move ${entries.length} items to Trash?`
-          : `"${entries[0].name}" is not empty. Move it and everything inside to Trash?`;
+      let message;
+      if (entries.length > 1) {
+        message = `Move ${entries.length} items to Trash?`;
+      } else if (isNonEmptyFolder) {
+        message = `"${entries[0].name}" is not empty. Move it and everything inside to Trash?`;
+      } else {
+        message = `Move "${entries[0].name}" to Trash?`;
+      }
       const confirmed = await showConfirmDialog({ title: "Delete", message, confirmLabel: "Move to Trash", destructive: true });
       if (!confirmed) return;
     }
@@ -1093,6 +1308,39 @@ class ExplorerManager {
         ],
       },
       { separator: true },
+      {
+        label: "View",
+        submenu: [
+          ["grid", "Grid"],
+          ["list", "List"],
+          ["details", "Details"],
+        ].map(([mode, label]) => ({
+          label,
+          checked: this._viewMode === mode,
+          radio: true,
+          action: () => settingsService.set("fileExplorer.defaultView", mode),
+        })),
+      },
+      {
+        label: "Sort by",
+        submenu: [
+          ...[
+            ["name", "Name"],
+            ["modified", "Date modified"],
+            ["created", "Date created"],
+            ["size", "Size"],
+            ["type", "Type"],
+          ].map(([field, label]) => ({
+            label,
+            checked: this._sort.field === field,
+            radio: true,
+            action: () => this._sortBy(field),
+          })),
+          { separator: true },
+          { label: "Ascending", checked: this._sort.direction === "asc", radio: true, action: () => this._sortBy(this._sort.field, "asc") },
+          { label: "Descending", checked: this._sort.direction === "desc", radio: true, action: () => this._sortBy(this._sort.field, "desc") },
+        ],
+      },
       { label: "Refresh", action: () => this.refresh() },
       { label: "Paste", disabled: !this._clipboardService.hasContent(), action: () => this._pasteIntoCurrentFolder() },
     ];
@@ -1174,6 +1422,7 @@ class ExplorerManager {
     subscribe("filesystem:fileRenamed", ({ entry, oldPath }) => this._handleRenameEvent(entry, oldPath));
     subscribe("filesystem:fileRenamed", () => this._refreshHomeIfActive());
     subscribe("filesystem:fileModified", ({ entry }) => this._handleModifiedEvent(entry));
+    subscribe("recentFiles:cleared", () => this._refreshHomeIfActive());
     subscribe("clipboard:changed", () => {
       if (!this._searchActive && this._path !== HOME_PATH && this._path !== FAVORITES_PATH) this._renderItemsList();
     });
