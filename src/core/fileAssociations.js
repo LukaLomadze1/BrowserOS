@@ -34,11 +34,14 @@ const TYPE_GLYPHS = Object.freeze({
   webp: "\u25a7",
   gif: "\u25a7",
   svg: "\u25a7",
+  html: "\u25ce",
+  htm: "\u25ce",
 });
 
 /** @type {ReadonlyArray<FileAssociation>} */
 const BUILT_IN_ASSOCIATIONS = Object.freeze([
   Object.freeze({ appId: "notes", label: "Notes", extensions: Object.freeze(["note", "txt", "md"]), description: "Document" }),
+  Object.freeze({ appId: "browser", label: "Browser", extensions: Object.freeze(["html", "htm"]), description: "Web page" }),
   Object.freeze({
     appId: "image-viewer",
     label: "Image Viewer",

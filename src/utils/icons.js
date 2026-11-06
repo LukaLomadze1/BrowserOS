@@ -127,6 +127,81 @@ const SHAPES = Object.freeze({
       },
     ],
   ],
+  globe: [
+    ["circle", { cx: "12", cy: "12", r: "8.5" }],
+    ["path", { d: "M3.5 12h17" }],
+    ["path", { d: "M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5s1.2-6.2 3.6-8.5z" }],
+  ],
+  lock: [
+    ["rect", { x: "5.5", y: "10.5", width: "13", height: "9.5", rx: "2" }],
+    ["path", { d: "M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5" }],
+  ],
+  "lock-open": [
+    ["rect", { x: "5.5", y: "10.5", width: "13", height: "9.5", rx: "2" }],
+    ["path", { d: "M8.5 10.5V8a3.5 3.5 0 0 1 6.8-1.2" }],
+  ],
+  shield: [
+    ["path", { d: "M12 3.5l7 2.8v5.2c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.3z" }],
+    ["path", { d: "M9.3 12.2l1.9 1.9 3.6-3.8" }],
+  ],
+  star: [["path", { d: "M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z" }]],
+  "star-filled": [["path", { d: "M12 4l2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z", fill: "currentColor" }]],
+  download: [
+    ["path", { d: "M12 4v11" }],
+    ["path", { d: "M7.5 10.8L12 15.3l4.5-4.5" }],
+    ["path", { d: "M5 19.5h14" }],
+  ],
+  arrowLeft: [["path", { d: "M19 12H5.5M11 6l-6 6 6 6" }]],
+  arrowRight: [["path", { d: "M5 12h13.5M13 6l6 6-6 6" }]],
+  reload: [
+    ["path", { d: "M19.2 12a7.2 7.2 0 1 1-2.1-5.1" }],
+    ["path", { d: "M19.5 4.5v4.2h-4.2" }],
+  ],
+  home: [
+    ["path", { d: "M4.5 11L12 4.5l7.5 6.5" }],
+    ["path", { d: "M6.5 9.5v10h4v-5.5h3v5.5h4v-10" }],
+  ],
+  plus: [["path", { d: "M12 5v14M5 12h14" }]],
+  more: [
+    ["circle", { cx: "6", cy: "12", r: "1.3", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "12", cy: "12", r: "1.3", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "18", cy: "12", r: "1.3", fill: "currentColor", stroke: "none" }],
+  ],
+  sidebar: [
+    ["rect", { x: "3.5", y: "4.5", width: "17", height: "15", rx: "2.5" }],
+    ["path", { d: "M9.5 4.5v15" }],
+  ],
+  folder: [["path", { d: "M3.5 7.5a2 2 0 0 1 2-2h3.8l2 2.2h7.2a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" }]],
+  search: [
+    ["circle", { cx: "10.5", cy: "10.5", r: "6" }],
+    ["path", { d: "M15 15l5 5" }],
+  ],
+  external: [
+    ["path", { d: "M13.5 4.5h6v6" }],
+    ["path", { d: "M19.5 4.5L11 13" }],
+    ["path", { d: "M17.5 14v4a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V8A1.5 1.5 0 0 1 6 6.5h4" }],
+  ],
+  history: [
+    ["path", { d: "M4.8 12a7.2 7.2 0 1 0 2.1-5.1" }],
+    ["path", { d: "M4.5 4.5v4.2h4.2" }],
+    ["path", { d: "M12 8.2v4.1l2.8 1.7" }],
+  ],
+  bookmark: [["path", { d: "M7 4.5h10v15.5l-5-3.6-5 3.6z" }]],
+  edit: [
+    ["path", { d: "M5 19l1-4.2L15.6 5.2a1.8 1.8 0 0 1 2.6 0l.6.6a1.8 1.8 0 0 1 0 2.6L9.2 18z" }],
+    ["path", { d: "M13.8 7l3.2 3.2" }],
+  ],
+  trash: [
+    ["path", { d: "M4.5 7h15" }],
+    ["path", { d: "M9.5 7V5h5v2" }],
+    ["path", { d: "M6.5 7l1 12.5h9l1-12.5" }],
+  ],
+  file: [
+    ["path", { d: "M6.5 3.5h7l4 4v13h-11z" }],
+    ["path", { d: "M13.5 3.5v4h4" }],
+  ],
+  chevronDown: [["path", { d: "M6 9.5l6 6 6-6" }]],
+  chevronUp: [["path", { d: "M6 14.5l6-6 6 6" }]],
   chevronLeft: [["path", { d: "M14.5 6l-6 6 6 6" }]],
   chevronRight: [["path", { d: "M9.5 6l6 6-6 6" }]],
   close: [["path", { d: "M6.5 6.5l11 11M17.5 6.5l-11 11" }]],

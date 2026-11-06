@@ -72,6 +72,24 @@ class ExplorerView {
   }
 
   /**
+   * A short note about the current folder with one action (e.g. /Downloads
+   * links to the Download Manager), or null to hide it.
+   * @param {{text: string, actionLabel: string, onAction: () => void}|null} banner
+   * @returns {void}
+   */
+  setFolderBanner(banner) {
+    this._folderBannerEl.hidden = !banner;
+    if (!banner) {
+      this._folderBannerEl.replaceChildren();
+      return;
+    }
+    this._folderBannerEl.replaceChildren(
+      createElement("span", { className: "explorer__folder-banner-text", text: banner.text }),
+      createElement("button", { className: "explorer__folder-banner-button", attrs: { type: "button" }, text: banner.actionLabel, on: { click: banner.onAction } })
+    );
+  }
+
+  /**
    * @param {{canBack: boolean, canForward: boolean, canUp: boolean}} state
    * @returns {void}
    */
@@ -626,7 +644,8 @@ class ExplorerView {
       this._callbacks.onImportFiles(files);
     });
 
-    const main = createElement("div", { className: "explorer__main", children: [this._detailsHeaderEl, this._listEl] });
+    this._folderBannerEl = createElement("div", { className: "explorer__folder-banner", attrs: { role: "note", hidden: "" } });
+    const main = createElement("div", { className: "explorer__main", children: [this._folderBannerEl, this._detailsHeaderEl, this._listEl] });
     const body = createElement("div", { className: "explorer__body", children: [sidebar, main] });
 
     this._statusEl = createElement("div", { className: "explorer__status-text" });

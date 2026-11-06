@@ -389,6 +389,15 @@ class ExplorerManager {
     });
     this._view.setBreadcrumbs(this._buildBreadcrumbs());
     this._view.setImportEnabled(this._path !== HOME_PATH && this._path !== FAVORITES_PATH && !this._isInTrash(this._path));
+    this._view.setFolderBanner(
+      this._path === "/Downloads" && this._appManager.isRegistered("downloads")
+        ? {
+            text: "Files downloaded with the Browser are saved here.",
+            actionLabel: "Open Download Manager",
+            onAction: () => this._appManager.launch("downloads").catch(() => {}),
+          }
+        : null
+    );
     this._view.setAddressMode("breadcrumbs");
     this._addressEditing = false;
     this._view.setActiveSidebarPath(this._path);

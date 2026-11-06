@@ -93,6 +93,9 @@ import { systemClock } from "./core/shell/systemClock.js";
 import { TrayManager } from "./core/shell/trayManager.js";
 import { appMonitor } from "./core/system/appMonitor.js";
 import { storageMonitor } from "./core/system/storageMonitor.js";
+import { bookmarkService } from "./core/browser/bookmarkService.js";
+import { historyService } from "./core/browser/historyService.js";
+import { downloadService } from "./core/downloads/downloadService.js";
 
 /** App ids shown as desktop shortcuts; names and icons come from AppManager. */
 const DESKTOP_SHORTCUT_APPS = [
@@ -103,6 +106,7 @@ const DESKTOP_SHORTCUT_APPS = [
   { appId: "terminal", type: "application" },
   { appId: "calendar", type: "application" },
   { appId: "clock", type: "application" },
+  { appId: "browser", type: "application" },
   { appId: "recycle-bin", type: "system" },
 ];
 
@@ -220,11 +224,30 @@ async function boot() {
     singleInstance: true,
     loader: () => import("./apps/task-manager/main.js"),
   });
+  appManager.register({
+    id: "browser",
+    name: "Browser",
+    icon: "icon:globe",
+    description: "Browse the web with tabs, bookmarks, history, and downloads",
+    category: "Internet",
+    singleInstance: false,
+    loader: () => import("./apps/browser/main.js"),
+  });
+  appManager.register({
+    id: "downloads",
+    name: "Downloads",
+    icon: "icon:download",
+    description: "Download Manager: files downloaded into /Downloads",
+    category: "Internet",
+    singleInstance: true,
+    loader: () => import("./apps/downloads/main.js"),
+  });
 
   await vfs.init();
 
   // Data for services that run whether or not their app windows are open.
   calendarService.init({ vfs, appManager });
+  bookmarkService.init({ vfs });
   clockService.init();
 
   const recentFilesService = new RecentFilesService(vfs);
@@ -253,6 +276,10 @@ async function boot() {
     },
   });
   appMonitor.configure({ appManager });
+  downloadService.configure({
+    vfs,
+    openPath: async (path) => openVfsEntry(await vfs.getInfo(path), { appManager, recentFilesService }),
+  });
 
   // Background services (see src/core/services/serviceManager.js).
   serviceManager.register({
@@ -308,6 +335,15 @@ async function boot() {
     stop: () => storageMonitor.stop(),
     getDetails: () => storageMonitor.getDetails(),
   });
+  serviceManager.register({
+    id: "downloads",
+    name: "Downloads",
+    description: "Downloads files from the web into /Downloads and keeps the download list.",
+    dependencies: ["notifications"],
+    start: () => downloadService.start(),
+    stop: () => downloadService.stop(),
+    getDetails: () => downloadService.getDetails(),
+  });
 
   const desktopManager = new DesktopManager({
     container: desktop.getIconLayer(),
@@ -358,6 +394,9 @@ async function boot() {
   window.serviceManager = serviceManager;
   window.trayManager = trayManager;
   window.appMonitor = appMonitor;
+  window.bookmarkService = bookmarkService;
+  window.historyService = historyService;
+  window.downloadService = downloadService;
 
   await serviceManager.startAll();
 

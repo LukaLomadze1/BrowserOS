@@ -15,6 +15,7 @@
 
 import { eventBus } from "../../core/eventBus.js";
 import { notificationService } from "../../core/notifications/notificationService.js";
+import { downloadService } from "../../core/downloads/downloadService.js";
 import { storage } from "../../core/storage.js";
 import { openVfsEntry } from "../../core/vfs/vfsOpener.js";
 import { keyboardShortcuts } from "../../core/keyboard/keyboardShortcuts.js";
@@ -337,6 +338,7 @@ class TerminalManager {
       clear: () => this._clear(),
       setCwd: (path) => this._setCwd(path),
       openEntry: (entry) => this._openEntry(entry),
+      download: (url) => downloadService.download(/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`, { source: "terminal" }),
     };
   }
 

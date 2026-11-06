@@ -18,6 +18,8 @@
  *   notifications Do Not Disturb, toast duration, previews, sounds, history (NotificationService).
  *   taskbar       Tray clock and date display (TrayManager).
  *   taskManager   Task Manager refresh rate.
+ *   browser       Search engine, homepage, bookmarks bar, start page, history retention (Browser).
+ *   downloads     Download size limit and completion notifications (DownloadService).
  *
  * Descriptor fields:
  *
@@ -41,6 +43,7 @@
  */
 
 import { ACCENT_IDS, DEFAULT_ACCENT_ID } from "./accentPresets.js";
+import { SEARCH_ENGINE_IDS, DEFAULT_SEARCH_ENGINE_ID } from "../browser/searchEngines.js";
 
 /**
  * Version of the persisted settings document. Increment it whenever
@@ -60,7 +63,7 @@ export const WALLPAPER_PRESETS = Object.freeze([
 ]);
 
 /** Apps pinned to the Start Menu on first boot and after a reset. */
-export const DEFAULT_PINNED_APP_IDS = Object.freeze(["notes", "calendar", "calculator", "clock", "file-explorer", "settings", "about", "recycle-bin"]);
+export const DEFAULT_PINNED_APP_IDS = Object.freeze(["browser", "notes", "calendar", "calculator", "clock", "file-explorer", "settings", "about", "recycle-bin"]);
 
 const CONFIRM_TRASH_VALUES = ["always", "smart", "never"];
 
@@ -582,6 +585,75 @@ export const SETTINGS_SCHEMA = freezeSchema({
     allowedValues: [1, 2, 5, 10],
     persist: true,
     description: "Seconds between Task Manager measurements (performance figures and running times).",
+  },
+
+  // ---------------------------------------------------------------
+  // Browser
+  // ---------------------------------------------------------------
+  "browser.searchEngine": {
+    category: "browser",
+    type: "string",
+    defaultValue: DEFAULT_SEARCH_ENGINE_ID,
+    allowedValues: SEARCH_ENGINE_IDS,
+    persist: true,
+    description: "Search engine used for address-bar searches.",
+  },
+  "browser.homepage": {
+    category: "browser",
+    type: "string",
+    defaultValue: "",
+    validate: (value) => value === "" || (/^https?:\/\/[^\s]+$/i.test(value) && value.length <= 2048),
+    persist: true,
+    description: "Page the Home button opens; empty means the start page.",
+  },
+  "browser.showBookmarksBar": {
+    category: "browser",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Show the bookmarks bar under the toolbar.",
+  },
+  "browser.startPageClock": {
+    category: "browser",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Show the time and date on the start page.",
+  },
+  "browser.startPageBackground": {
+    category: "browser",
+    type: "string",
+    defaultValue: "accent",
+    allowedValues: ["accent", "wallpaper", "plain"],
+    persist: true,
+    description: "Start page background.",
+  },
+  "browser.historyDays": {
+    category: "browser",
+    type: "number",
+    defaultValue: 90,
+    allowedValues: [7, 30, 90, 365],
+    persist: true,
+    description: "Days of browsing history to keep.",
+  },
+
+  // ---------------------------------------------------------------
+  // Downloads
+  // ---------------------------------------------------------------
+  "downloads.maxSizeMb": {
+    category: "downloads",
+    type: "number",
+    defaultValue: 250,
+    allowedValues: [25, 100, 250, 500],
+    persist: true,
+    description: "Largest file the Download Manager saves into the BrowserOS file system, in MB.",
+  },
+  "downloads.notifyOnComplete": {
+    category: "downloads",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Show a notification when a download finishes (failures are always reported).",
   },
 });
 

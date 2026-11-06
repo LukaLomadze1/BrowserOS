@@ -51,6 +51,11 @@ then open the served URL.
   tray (`src/core/shell/trayManager.js`), and its panels
   (`src/components/shell/`): Notification Center, Quick Settings, and
   the date panel. See [System shell](#system-shell).
+- **Browser** — the Browser application (`src/apps/browser/`) with
+  shared data services in `src/core/browser/` (history, bookmarks,
+  start-page shortcuts, embedding policy, address parsing, search
+  engines) and the Download Manager service in `src/core/downloads/`.
+  See [Browser architecture and limits](#browser-architecture-and-limits).
 - **Icons** (`src/utils/icons.js`) — an icon is either a text glyph or
   a built-in line icon (`"icon:clock"`); every shell surface renders
   icons through `renderIcon()` / `createIconElement()`.
@@ -88,6 +93,8 @@ nothing needs a reload and every open window stays in sync.
 | `notifications`| `notificationService`                              | Do Not Disturb, banner duration, message previews, sounds, history limit                                                                                                                                 |
 | `taskbar`      | `TrayManager`                                      | show time, show date, clock format (automatic / 12-hour / 24-hour), seconds                                                                                                                              |
 | `taskManager`  | every Task Manager window                          | refresh interval                                                                                                                                                                                         |
+| `browser`      | every Browser window, `historyService`             | search engine, homepage, bookmarks bar, start page clock and background, history retention                                                                                                              |
+| `downloads`    | `downloadService`                                  | largest download, completion notifications                                                                                                                                                               |
 
 Defaults for every key are in `settingsSchema.js`. Highlights:
 medium icons, normal spacing, double-click to open, grid view sorted
@@ -247,6 +254,19 @@ Application shortcuts are local to the focused application window:
 | ← / →                                      | Previous / next image in the folder                 | Image Viewer         |
 | + / −, 0, 1                                | Zoom in / out, fit to window, actual size           | Image Viewer         |
 | R / Shift + R, Home, F                     | Rotate clockwise / counter-clockwise, reset, fullscreen | Image Viewer     |
+| Alt + T, Alt + W, Alt + Shift + T          | New tab, close tab, reopen closed tab               | Browser              |
+| Alt + Page Down / Page Up                  | Next / previous tab                                 | Browser              |
+| Ctrl + L, Alt + D, F6                      | Focus the address bar                               | Browser              |
+| Alt + ← / →, Ctrl + R or F5, Alt + Home     | Back / forward, reload, home                        | Browser              |
+| Ctrl + D, Ctrl + H, Ctrl + Shift + O, Ctrl + J | Bookmark, history, bookmark manager, downloads  | Browser              |
+| Esc                                        | Stop loading                                        | Browser              |
+
+The Browser uses Alt-based tab shortcuts because the host browser keeps
+Ctrl + T, Ctrl + W, Ctrl + Shift + T, and Ctrl + Tab for its own tabs —
+a web page never receives them, and Ctrl + W closes the host tab that
+BrowserOS runs in. While the keyboard focus is inside an embedded web
+page, keys go to that page, so Browser shortcuts work once focus is on
+the Browser's own controls.
 
 On macOS, ⌘ takes the place of Ctrl wherever a shortcut is defined
 with the platform modifier. Arrow-key list navigation inside
@@ -271,13 +291,17 @@ The full, always-current list is in **Settings › Keyboard Shortcuts**.
 | About         | `about`         | System       | single    | —                                  |
 | Recycle Bin   | `recycle-bin`   | System       | single    | —                                  |
 | Task Manager  | `task-manager`  | System       | single    | —                                  |
+| Browser       | `browser`       | Internet     | multiple  | `.html`, `.htm`                    |
+| Downloads     | `downloads`     | Internet     | single    | —                                  |
 
 Every application is registered once in `src/main.js` and reaches the
 Start Menu (all apps, search, pinning) and the Settings pin list from
-that registration. Notes, Calendar, Calculator, Clock, File Explorer,
-Terminal, About, and Recycle Bin also have desktop shortcuts; Image
-Viewer is opened through files; Task Manager opens from the Start
-Menu, Ctrl + Alt + Esc, or a taskbar button's context menu.
+that registration. Notes, Calendar, Calculator, Clock, Browser, File
+Explorer, Terminal, About, and Recycle Bin also have desktop
+shortcuts; Image Viewer is opened through files; Task Manager opens
+from the Start Menu, Ctrl + Alt + Esc, or a taskbar button's context
+menu; Downloads opens from the Start Menu, the Browser, download
+notifications, and the `/Downloads` folder in File Explorer.
 
 ### Building an application
 
@@ -517,12 +541,102 @@ follow `taskManager.refreshInterval` and pause while Task Manager is
 minimized or the tab is hidden. Launch options:
 `{ tab: "applications" | "performance" | "services", select?: appId }`.
 
+### Browser
+
+A tabbed web browser: address/search bar with suggestions from history
+and bookmarks, back / forward / reload / home, a security indicator,
+bookmark star, bookmarks bar, downloads button, sidebar (bookmarks,
+history, downloads), and a menu (new window, new private window,
+history, bookmarks, downloads, save page to Downloads, open in your
+browser, copy address, clear browsing data, settings).
+
+- **Addresses.** `example.com` opens `https://example.com/`;
+  `localhost:8080` and IP addresses use http; other text is searched
+  with the configured engine (Google, Bing, or DuckDuckGo —
+  `src/core/browser/searchEngines.js`); `browseros://start`, `history`,
+  `bookmarks`, and `downloads` are built-in pages; `vfs:///path` opens a
+  BrowserOS file; `javascript:`, `data:`, and `file:` are refused;
+  invalid addresses show an error page that keeps what was typed.
+- **Tabs.** Each window has its own tabs, each with its own history.
+  Tabs show favicons (loaded from the site's icon link or
+  `/favicon.ico`, else a globe), titles, and a loading spinner; the
+  strip scrolls horizontally when full. Tab menu: new tab, reload,
+  duplicate, bookmark, close, close others, reopen closed tab (the last
+  ten keep their history). Middle-click closes. Only the six most
+  recently used tabs keep a live page; older background tabs are
+  unloaded (shown in italics) and reload when selected.
+- **Start page.** Clock and date (optional), search box, your own
+  shortcuts (add, rename, edit, reorder, remove — up to twelve),
+  frequently and recently visited pages computed from history,
+  bookmarks-bar items, and a background (accent, the desktop
+  wallpaper, or plain). Empty sections say how they fill up; nothing is
+  pre-filled.
+- **Bookmarks** (`bookmarkService`, stored in the VFS at
+  `/Documents/Browser/bookmarks.json`): "Bookmarks bar" and "Other
+  bookmarks" plus your folders. Ctrl + D or the star adds the page and
+  opens a small editor (name, folder, remove). The bookmark manager
+  (`browseros://bookmarks`) adds, edits, deletes, reorders, moves
+  between folders, creates folders, searches, imports a bookmarks HTML
+  file (the standard format other browsers export) or BrowserOS JSON,
+  and exports a bookmarks HTML file to `/Downloads`. Invalid addresses
+  and duplicates (same address in the same folder) are refused; an
+  unreadable file is kept aside and bookmarks start empty.
+- **History** (`historyService`): one record per page with its title,
+  favicon, visit count, and up to thirty visit times; a repeat visit
+  within 30 seconds doesn't count again. `browseros://history` groups
+  visits by day, searches, removes single visits, and clears the last
+  hour, day, week, four weeks, or everything. History older than
+  `browser.historyDays` and beyond 2,000 pages is removed.
+- **Private windows** (`appManager.launch("browser", { private: true })`)
+  are marked in the tab strip and window title, don't add to history,
+  and their downloads aren't kept in the download list (the files are
+  still saved). They are not anonymous: pages load through the host
+  browser with its cookies and site data, shared with normal windows.
+
+Launch options: `{ url?, private?, path? }` (`path` opens a BrowserOS
+file; `.html` / `.htm` files open in the Browser from File Explorer).
+
+### Downloads
+
+The Download Manager (`src/core/downloads/downloadService.js`, the
+`downloads` service) saves web files into `/Downloads` through the VFS
+API. The Downloads window, the Browser's downloads button and sidebar,
+`browseros://downloads`, and Terminal's `download <url>` all use it.
+
+1. A download starts from a page link marked `download` or pointing at
+   an archive or installer (on pages the Browser can read, i.e.
+   BrowserOS's own address), from typing such an address, from "Save
+   page to Downloads", from an address entered in the Downloads window,
+   or from Terminal.
+2. The file is fetched and streamed. Progress is shown only when the
+   server sends a size (otherwise the bar shows activity and the
+   received amount); speed and time left are measured from the bytes
+   actually received.
+3. The name comes from `Content-Disposition` (including `filename*=`)
+   when the browser lets BrowserOS read it, else the URL; a missing
+   extension is taken from the content type. Taken names get
+   " (2)", " (3)", …
+4. The content is written with `vfs.createFile`; the download completes
+   and a notification opens the file.
+
+Downloads can be cancelled, retried, removed from the list, opened,
+shown in their folder, and filtered (in progress, completed, failed).
+Failures are explained: network or cross-origin refusal (with
+"Download with your browser", which saves outside BrowserOS), HTTP
+errors, files over `downloads.maxSizeMb` (refused before saving when
+the size is known), file types BrowserOS can't store, and storage
+errors. Pause and resume aren't offered: a plain web request can't
+resume a partial download. A download interrupted by closing
+BrowserOS is listed as interrupted and can be retried. The list (up to
+200 entries, without private downloads) is kept in StorageService
+(`downloads:history`).
+
 ### Settings
 
 **Settings** opens from the Start Menu, the desktop's _Personalize_
 context-menu submenu, Ctrl + `,`, or `appManager.launch("settings")`.
 Pages: Appearance, Wallpaper, Desktop, Start Menu, File Explorer,
-Notifications, Taskbar, Keyboard Shortcuts, and System (reset one
+Notifications, Taskbar, Browser, Keyboard Shortcuts, and System (reset one
 category or everything, with confirmation). Every change applies immediately, every option can
 be reset individually, and the sidebar search jumps straight to a
 section. New pages are added by registering a category in
@@ -568,8 +682,16 @@ become _Open with_ alternatives. Changes emit
 
 Text files (`.txt`, `.md`, `.note`, `.svg`, `.json`, `.csv`, …) are
 stored as strings and read with `vfs.read(path)` / written with
-`vfs.write(path, text)`. Raster images (`png`, `jpg`, `jpeg`, `webp`,
-`gif`) are stored as Blobs in IndexedDB:
+`vfs.write(path, text)`. Binary types are stored as Blobs in IndexedDB:
+images (`png`, `jpg`, `jpeg`, `webp`, `gif`, `bmp`, `ico`, `avif`,
+`tif`), documents (`pdf`, `docx`, `xlsx`, `pptx`, `odt`, `ods`, `odp`,
+`epub`), archives and packages (`zip`, `7z`, `rar`, `gz`, `tgz`, `tar`,
+`bz2`, `xz`, `jar`, `apk`, `deb`, `rpm`, `dmg`, `iso`), audio and video
+(`mp3`, `wav`, `ogg`, `flac`, `m4a`, `aac`, `opus`, `mp4`, `m4v`,
+`webm`, `mov`, `mkv`, `avi`), fonts, `wasm`, `bin`, and `dat`. Windows
+programs (`exe`, `msi`) aren't stored: BrowserOS can't run them.
+`getExtensionForMimeType()` (`src/core/vfs/entry.js`) maps a content
+type back to an extension.
 
 ```js
 const blob = await vfs.readBinary("/Pictures/photo.png"); // Blob with the right MIME type
@@ -777,6 +899,7 @@ as failed with its error, and every running service is stopped on
 | `clock-alarms`       | Alarms, snooze, timer completion, missed-alarm report                   | notifications |
 | `app-monitor`        | Attributes errors to applications; measures main-thread delay           | notifications |
 | `storage-monitor`    | Warns when settings or data can't be saved, or site storage is 90% full | notifications |
+| `downloads`          | Downloads into /Downloads; keeps the download list                      | notifications |
 
 **Application monitor.** Uncaught errors, unhandled rejections, and
 exceptions thrown by EventBus listeners are attributed to an
@@ -791,6 +914,57 @@ runs after the tab closes. Services that matter across reloads keep
 their state in storage (alarm times, timer end times, fired reminders)
 and recover it when they start.
 
+## Browser architecture and limits
+
+BrowserOS runs inside a web browser, and the Browser renders web pages
+in a sandboxed `<iframe>`. The web platform deliberately limits what
+one page can do with another:
+
+- **Embedding can be refused.** Sites that send `X-Frame-Options` or
+  `Content-Security-Policy: frame-ancestors` can't be shown inside
+  another page, and the embedding page can't detect the refusal or read
+  those headers. The Browser therefore keeps a short list of popular
+  sites known to refuse (`src/core/browser/framePolicy.js`) and shows
+  an explanation with **Open in your browser**, **Always open this site
+  in your browser**, and **Show here anyway** instead of a blank frame.
+  For other sites it embeds the page and shows a notice in case it
+  stays blank. BrowserOS never works around these protections (no
+  proxies, no disabled security).
+- **Other sites are opaque.** For pages from another origin, the title,
+  current address, content, and links can't be read. The tab shows the
+  host name, and when such a page navigates by itself the Browser knows
+  that it happened but not where it went (the address bar says so).
+  Pages from BrowserOS's own address are readable and are shown without
+  running their scripts.
+- **Sandbox.** Embedded pages can't navigate BrowserOS away (no
+  top-level navigation), get no camera, microphone, or location access,
+  and open pop-ups and their own downloads through the host browser
+  (outside BrowserOS).
+- **Downloads into BrowserOS use `fetch()`**, so they work for files
+  from BrowserOS's own address and from servers that allow cross-origin
+  requests (CORS). Other files fail with an explanation and can be
+  downloaded by the host browser instead. `Content-Disposition` is only
+  readable when the server exposes it to cross-origin requests.
+- **Keyboard.** While focus is inside an embedded page, key presses go
+  to that page. The host browser keeps some shortcuts for itself
+  (Ctrl + T, Ctrl + W, Ctrl + Tab), so the Browser uses Alt-based ones.
+- **Cookies and data** are the host browser's, shared by every
+  BrowserOS window, private or not.
+
+**Upgrade path.** The rendering backend is isolated behind a small
+interface (`src/apps/browser/renderers/frameRenderer.js`: `load`,
+`reload`, `stop`, `destroy`, and `onLoadStart` / `onLoadEnd` /
+`onInPageNavigation` / `onDownloadRequest` / `onError` callbacks, plus
+declared `capabilities`). Tabs and navigation (`tabSession.js`),
+history, bookmarks, downloads, and preferences don't depend on it. A
+desktop build with Electron (`<webview>` / `WebContentsView`) or Tauri
+(a native web view per tab) could implement the same interface with a
+real browser engine: every site would display, titles, favicons, and
+in-page navigation would be reported by the engine, back / forward
+could use the engine's own history, and downloads could be intercepted
+from any page (Electron's `will-download`) and streamed into the VFS
+without CORS limits.
+
 ## Persistence
 
 | Data                             | Where                                                    |
@@ -802,6 +976,12 @@ and recover it when they start.
 | Fired calendar reminders         | StorageService: `calendar:firedReminders` (pruned after 3 days) |
 | Alarms, timer, stopwatch, cities | StorageService: `clock:*`                                |
 | Notification history             | StorageService: `notifications:history` (limit and seven-day expiry) |
+| Bookmarks                        | VFS: `/Documents/Browser/bookmarks.json`                 |
+| Browsing history                 | StorageService: `browser:history` (retention setting, 2,000 pages) |
+| Start page shortcuts             | StorageService: `browser:shortcuts`                      |
+| Per-site embedding choices       | StorageService: `browser:sitePolicies`                   |
+| Download list                    | StorageService: `downloads:history` (200 entries, no private downloads) |
+| Downloaded files                 | VFS: `/Downloads`                                        |
 | Settings                         | StorageService: `settings`                               |
 
 StorageService (`src/core/storage.js`) stores JSON in localStorage and
@@ -847,6 +1027,14 @@ damaged storage never prevents BrowserOS from starting.
 | `service:error`                                             | `{ id, message, phase }`              |
 | `service:statusChanged`                                     | `{ id, status }`                      |
 | `window:titleChanged`                                       | `{ id, title }`                       |
+| `browser:historyChanged`                                    | `{ reason }`                          |
+| `browser:shortcutsChanged` / `browser:sitePoliciesChanged`  | `{}`                                  |
+| `bookmarks:ready`                                           | `{}`                                  |
+| `bookmarks:changed`                                         | `{ reason }`                          |
+| `downloads:changed`                                         | `{ id, reason }`                      |
+| `downloads:started`                                         | `{ id }`                              |
+| `downloads:completed`                                       | `{ id, path }`                        |
+| `downloads:failed`                                          | `{ id, kind }`                        |
 | `storage:writeFailed`                                       | `{ key, message }`                    |
 
 Request events: `shell:togglePanel` `{ panel }`, `shell:closePanels`,
@@ -902,3 +1090,9 @@ that show files subscribe to these instead of polling.
 - There is no window overview (Win + Tab), and Win-key combinations
   other than Win alone aren't used, because the operating system
   handles them before the browser sees them.
+- The Browser shows web pages inside the host browser, so it inherits
+  the limits described in [Browser architecture and
+  limits](#browser-architecture-and-limits): many sites refuse to be
+  embedded, embedded pages from other sites can't be read, their own
+  navigation can't be followed, and only CORS-enabled (or same-origin)
+  files can be downloaded into BrowserOS.

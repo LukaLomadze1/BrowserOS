@@ -269,6 +269,12 @@ export function createCommandRegistry() {
     ctx.print("guest");
   });
 
+  register("download", "Download a web address into /Downloads (see the Downloads app for progress)", (args, ctx) => {
+    if (args.length === 0) throw new Error("download: missing address");
+    const id = ctx.download(args[0]);
+    ctx.print(`Downloading ${args[0]} \u2014 track it in the Downloads app (download id ${id.slice(0, 8)}).`);
+  });
+
   register("sleep", "Wait for a number of seconds (Ctrl + C interrupts)", (args, ctx) => {
     const seconds = Number(args[0]);
     if (args.length === 0) throw new Error("sleep: missing operand");

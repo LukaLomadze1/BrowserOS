@@ -12,7 +12,8 @@
  * @param {object} [options] - Configuration for the element.
  * @param {string} [options.className] - Space-separated class list.
  * @param {Object<string,string>} [options.attrs] - Attributes to set
- *   via setAttribute (use for aria-*, data-*, role, etc.).
+ *   via setAttribute (use for aria-*, data-*, role, etc.). Attributes
+ *   whose value is null or undefined are left out.
  * @param {string} [options.text] - Text content to set.
  * @param {Array<Node|string>} [options.children] - Child nodes or
  *   strings to append, in order.
@@ -30,7 +31,8 @@ export function createElement(tag, options = {}) {
 
   if (attrs) {
     for (const [key, value] of Object.entries(attrs)) {
-      el.setAttribute(key, value);
+      // null / undefined mean "no attribute" (setAttribute would write "null").
+      if (value !== null && value !== undefined) el.setAttribute(key, value);
     }
   }
 
@@ -46,7 +48,7 @@ export function createElement(tag, options = {}) {
 
   if (on) {
     for (const [eventName, handler] of Object.entries(on)) {
-      el.addEventListener(eventName, handler);
+      if (typeof handler === "function") el.addEventListener(eventName, handler);
     }
   }
 

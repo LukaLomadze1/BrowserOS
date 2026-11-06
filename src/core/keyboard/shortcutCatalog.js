@@ -54,6 +54,7 @@ export const SHORTCUT_CATEGORIES = Object.freeze([
   Object.freeze({ id: "calendar", label: "Calendar" }),
   Object.freeze({ id: "clock", label: "Clock" }),
   Object.freeze({ id: "imageViewer", label: "Image Viewer" }),
+  Object.freeze({ id: "browser", label: "Browser" }),
 ]);
 
 const DESKTOP_CONTEXT = "Desktop icons focused";
@@ -65,6 +66,7 @@ const NOTES_EDITOR_CONTEXT = "Notes editor (rich notes)";
 const CALCULATOR_CONTEXT = "Calculator window";
 const CALENDAR_CONTEXT = "Calendar window";
 const VIEWER_CONTEXT = "Image Viewer window";
+const BROWSER_CONTEXT = "Browser window (not inside a web page)";
 
 /**
  * @typedef {object} KeyCombo
@@ -344,6 +346,21 @@ export const SHORTCUT_DEFINITIONS = deepFreeze([
   { id: "imageViewer.rotateRight", category: "imageViewer", description: "Rotate clockwise", context: VIEWER_CONTEXT, combos: [{ key: "r" }], scope: "local" },
   { id: "imageViewer.rotateLeft", category: "imageViewer", description: "Rotate counter-clockwise", context: VIEWER_CONTEXT, combos: [{ key: "r", shift: true }], scope: "local" },
   { id: "imageViewer.reset", category: "imageViewer", description: "Reset zoom and rotation", context: VIEWER_CONTEXT, combos: [{ key: "Home" }], scope: "local" },
+  { id: "browser.newTab", category: "browser", description: "New tab", context: BROWSER_CONTEXT, combos: [{ key: "t", alt: true }], scope: "local", allowInEditable: true },
+  { id: "browser.closeTab", category: "browser", description: "Close tab", context: BROWSER_CONTEXT, combos: [{ key: "w", alt: true }], scope: "local", allowInEditable: true },
+  { id: "browser.reopenTab", category: "browser", description: "Reopen closed tab", context: BROWSER_CONTEXT, combos: [{ key: "t", alt: true, shift: true }], scope: "local", allowInEditable: true },
+  { id: "browser.nextTab", category: "browser", description: "Next tab", context: BROWSER_CONTEXT, combos: [{ key: "PageDown", alt: true }], scope: "local", allowInEditable: true },
+  { id: "browser.previousTab", category: "browser", description: "Previous tab", context: BROWSER_CONTEXT, combos: [{ key: "PageUp", alt: true }], scope: "local", allowInEditable: true },
+  { id: "browser.focusAddress", category: "browser", description: "Focus the address bar", context: BROWSER_CONTEXT, combos: [{ key: "l", mod: true }, { key: "d", alt: true }, { key: "F6" }], scope: "local", allowInEditable: true },
+  { id: "browser.back", category: "browser", description: "Back", context: BROWSER_CONTEXT, combos: [{ key: "ArrowLeft", alt: true }], scope: "local", allowInEditable: true },
+  { id: "browser.forward", category: "browser", description: "Forward", context: BROWSER_CONTEXT, combos: [{ key: "ArrowRight", alt: true }], scope: "local", allowInEditable: true },
+  { id: "browser.reload", category: "browser", description: "Reload", context: BROWSER_CONTEXT, combos: [{ key: "r", mod: true }, { key: "F5" }], scope: "local", allowInEditable: true },
+  { id: "browser.home", category: "browser", description: "Home page", context: BROWSER_CONTEXT, combos: [{ key: "Home", alt: true }], scope: "local", allowInEditable: true },
+  { id: "browser.bookmark", category: "browser", description: "Bookmark this page", context: BROWSER_CONTEXT, combos: [{ key: "d", mod: true }], scope: "local", allowInEditable: true },
+  { id: "browser.history", category: "browser", description: "History", context: BROWSER_CONTEXT, combos: [{ key: "h", mod: true }], scope: "local", allowInEditable: true },
+  { id: "browser.bookmarks", category: "browser", description: "Bookmark manager", context: BROWSER_CONTEXT, combos: [{ key: "o", mod: true, shift: true }], scope: "local", allowInEditable: true },
+  { id: "browser.downloads", category: "browser", description: "Downloads", context: BROWSER_CONTEXT, combos: [{ key: "j", mod: true }], scope: "local", allowInEditable: true },
+  { id: "browser.stop", category: "browser", description: "Stop loading", context: "Browser window, while a page loads", combos: [{ key: "Escape" }], scope: "local" },
   { id: "imageViewer.fullscreen", category: "imageViewer", description: "Toggle fullscreen", context: VIEWER_CONTEXT, combos: [{ key: "f" }], scope: "local" },
 ]);
 
