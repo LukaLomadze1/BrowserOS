@@ -9,6 +9,12 @@
  * Each call creates and disposes its own instance — dialogs are
  * inherently one-at-a-time in practice, so there's no shared state to
  * get wrong by not making this a singleton like ContextMenu.
+ *
+ * Form dialogs (event editor, rename/prompt) use three optional hooks:
+ * `onBeforeClose` can veto a button (e.g. invalid input keeps the
+ * dialog open while it shows an error), `submitValue` makes Enter in a
+ * single-line field act like that button, and `initialFocus` focuses a
+ * specific field instead of the autofocus button.
  */
 
 import { createElement } from "../../utils/dom.js";
@@ -25,6 +31,11 @@ class Dialog {
    * @param {HTMLElement} config.bodyElement
    * @param {Array<{label: string, value: *, variant?: "default"|"primary"|"danger", autofocus?: boolean}>} config.buttons
    * @param {boolean} [config.closeOnOutsideClick]
+   * @param {(result: *) => (boolean|Promise<boolean>)} [config.onBeforeClose] - Called for button and submit
+   *   results (never for Escape/backdrop); returning false keeps the dialog open.
+   * @param {*} [config.submitValue] - When set, Enter in a single-line input closes with this value.
+   * @param {HTMLElement} [config.initialFocus] - Element focused when the dialog opens.
+   * @param {string} [config.className] - Extra class on the dialog panel, e.g. "dialog--wide".
    * @param {(result: *) => void} config.onClose - Called exactly once with the chosen button's value, or null.
    */
   constructor(config) {
@@ -63,6 +74,29 @@ class Dialog {
     this._config.onClose(result);
   }
 
+  /**
+   * Close with a button or submit result, unless onBeforeClose vetoes it.
+   * @param {*} result
+   * @returns {Promise<void>}
+   */
+  async _requestClose(result) {
+    if (this._settled || this._validating) return;
+    if (typeof this._config.onBeforeClose === "function") {
+      this._validating = true;
+      let allowed = true;
+      try {
+        allowed = (await this._config.onBeforeClose(result)) !== false;
+      } catch (error) {
+        console.error("[Dialog] onBeforeClose threw:", error);
+        allowed = false;
+      } finally {
+        this._validating = false;
+      }
+      if (!allowed) return;
+    }
+    this.close(result);
+  }
+
   /** @returns {void} */
   _buildDom() {
     const titleId = `dialog-title-${Math.random().toString(36).slice(2)}`;
@@ -75,7 +109,7 @@ class Dialog {
     });
 
     this._dialogEl = createElement("div", {
-      className: "dialog",
+      className: this._config.className ? `dialog ${this._config.className}` : "dialog",
       attrs: {
         role: this._config.role ?? "dialog",
         "aria-modal": "true",
@@ -110,7 +144,8 @@ class Dialog {
       className: `dialog__button dialog__button--${variant}`,
       attrs: { type: "button" },
       text: button.label,
-      on: { click: () => this.close(button.value) },
+      // A null-valued button is a plain cancel and never needs validation.
+      on: { click: () => (button.value === null ? this.close(null) : this._requestClose(button.value)) },
     });
     if (button.autofocus) this._autofocusTarget = el;
     return el;
@@ -121,7 +156,7 @@ class Dialog {
     requestAnimationFrame(() => {
       this._backdropEl.classList.add("dialog-backdrop--visible");
       this._dialogEl.classList.add("dialog--visible");
-      (this._autofocusTarget ?? this._dialogEl).focus();
+      (this._config.initialFocus ?? this._autofocusTarget ?? this._dialogEl).focus();
     });
     document.addEventListener("keydown", this._keydownHandler, true);
   }
@@ -138,6 +173,17 @@ class Dialog {
     }
     if (e.key === "Tab") {
       this._trapTabFocus(e);
+      return;
+    }
+    if (
+      e.key === "Enter" &&
+      "submitValue" in this._config &&
+      e.target instanceof HTMLInputElement &&
+      this._dialogEl.contains(e.target) &&
+      !["checkbox", "radio", "button"].includes(e.target.type)
+    ) {
+      e.preventDefault();
+      this._requestClose(this._config.submitValue);
     }
   }
 
@@ -146,7 +192,11 @@ class Dialog {
    * @returns {void}
    */
   _trapTabFocus(e) {
-    const focusable = [...this._dialogEl.querySelectorAll("button:not([disabled]), input, [tabindex]")];
+    const focusable = [
+      ...this._dialogEl.querySelectorAll(
+        "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+      ),
+    ].filter((el) => el.offsetParent !== null);
     if (focusable.length === 0) return;
 
     const first = focusable[0];

@@ -31,7 +31,16 @@ then open the served URL.
 - **Virtual File System** (`src/core/vfs/`) — the single source of
   truth for every file and folder, backed by IndexedDB, exposed
   through one public API (`vfs`) that Desktop, File Explorer, Start
-  Menu search, and Terminal all share.
+  Menu search, Terminal, and every application share. Applications
+  never open IndexedDB themselves.
+- **File associations** (`src/core/fileAssociations.js`) and
+  **vfsOpener** (`src/core/vfs/vfsOpener.js`) — one registry decides
+  which application opens a file, and one function opens it, for
+  every entry point. See [Files and file associations](#files-and-file-associations).
+- **Shared services** for applications: notifications, dialogs,
+  calendar data, and clock state live in `src/core/` and
+  `src/components/`, not inside individual apps, so they keep working
+  while the owning app's window is closed.
 - **Settings** (`src/core/settings/`) — the single source of truth for
   every preference. See below.
 - **Keyboard shortcuts** (`src/core/keyboard/`) — one catalog and one
@@ -153,7 +162,8 @@ components restyle themselves with no per-component code.
 | `keyboard:shortcutsChanged`                                   | Shortcut definitions, bindings, or their enabled state changed.                          |
 
 Request events: `startmenu:toggle`, `startmenu:clearRecentApps`. All
-payloads are frozen.
+payloads are frozen. Application and file events are listed under
+[Events reference](#events-reference).
 
 ## Keyboard shortcuts
 
@@ -195,12 +205,237 @@ deliberately not used, since a web page cannot intercept them.
 | Ctrl + Alt + N               | New folder                                 | Explorer         |
 | Tab, ↑ / ↓, Ctrl + L, Ctrl + C | Complete, history, clear, cancel line    | Terminal         |
 
+Application shortcuts are local to the focused application window:
+
+| Shortcut                                   | Action                                              | Context              |
+| ------------------------------------------ | --------------------------------------------------- | -------------------- |
+| Ctrl + Alt + N                             | New note                                            | Notes                |
+| Ctrl + S / Ctrl + F                        | Save now / search notes                             | Notes                |
+| Ctrl + Z / Ctrl + Y (or Ctrl + Shift + Z)  | Undo / redo                                         | Notes                |
+| Ctrl + B / I / U, Ctrl + Shift + X         | Bold / italic / underline, strikethrough            | Notes editor         |
+| Ctrl + K                                   | Insert or edit a link                               | Notes editor         |
+| Ctrl + Shift + 7 / 8 / 9                   | Numbered list / bulleted list / checklist           | Notes editor         |
+| Ctrl + Alt + 1 / 2 / 3 / 0                 | Heading 1 / 2 / 3 / normal paragraph                | Notes editor         |
+| Enter or =, Escape or Delete, Backspace    | Calculate, clear, delete last entry                 | Calculator           |
+| Ctrl + C                                   | Copy the result                                     | Calculator           |
+| T, Page Up / Page Down                     | Today, previous / next period                       | Calendar             |
+| N, M / W / D                               | New event, month / week / day view                  | Calendar             |
+| Space, L                                   | Start or pause, record a lap                        | Clock (Stopwatch, Timer) |
+| ← / →                                      | Previous / next image in the folder                 | Image Viewer         |
+| + / −, 0, 1                                | Zoom in / out, fit to window, actual size           | Image Viewer         |
+| R / Shift + R, Home, F                     | Rotate clockwise / counter-clockwise, reset, fullscreen | Image Viewer     |
+
+On macOS, ⌘ takes the place of Ctrl wherever a shortcut is defined
+with the platform modifier. Arrow-key list navigation inside
+applications ignores key presses that carry Ctrl, Alt, Shift, or ⌘, so
+window shortcuts such as Alt + Shift + ↓ and Shift-selection in text
+fields always work.
+
 The full, always-current list is in **Settings › Keyboard Shortcuts**.
 
-## Apps
+## Applications
 
-About, Calculator, Notes, File Explorer, Terminal, Settings,
-Recycle Bin.
+| App           | Id              | Category     | Windows   | Opens                              |
+| ------------- | --------------- | ------------ | --------- | ---------------------------------- |
+| Notes         | `notes`         | Productivity | single    | `.note`, `.txt`, `.md`             |
+| Calendar      | `calendar`      | Productivity | single    | —                                  |
+| Calculator    | `calculator`    | Utilities    | multiple  | —                                  |
+| Clock         | `clock`         | Utilities    | single    | —                                  |
+| Image Viewer  | `image-viewer`  | Utilities    | multiple  | `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.svg` |
+| File Explorer | `file-explorer` | System       | multiple  | folders                            |
+| Terminal      | `terminal`      | System       | multiple  | —                                  |
+| Settings      | `settings`      | System       | single    | —                                  |
+| About         | `about`         | System       | single    | —                                  |
+| Recycle Bin   | `recycle-bin`   | System       | single    | —                                  |
+
+Every application is registered once in `src/main.js` and reaches the
+Start Menu (all apps, search, pinning) and the Settings pin list from
+that registration. Notes, Calendar, Calculator, Clock, File Explorer,
+Terminal, About, and Recycle Bin also have desktop shortcuts; Image
+Viewer is opened through files.
+
+### Building an application
+
+```js
+appManager.register({
+  id: "my-app",
+  name: "My App",
+  icon: "★",
+  description: "One line shown in Start Menu search", // optional
+  category: "Utilities", // optional
+  singleInstance: true, // focus the open window instead of opening another
+  loader: () => import("./apps/my-app/main.js"), // loaded on first launch
+});
+```
+
+The module's default export extends `Application`
+(`src/core/application.js`):
+
+| Member                   | Called when                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `launch(options)`        | The window is created. Returns `{ element, title?, icon?, width?, height?, minWidth?, minHeight?, … }`. `options` are the ones passed to `appManager.launch(id, options)`, e.g. `{ path }` when a file is opened. |
+| `onRelaunch(options)`    | A single-instance app is launched again while open (the window is already focused).              |
+| `onFocus()` / `onBlur()` | The app's window gains / loses focus.                                                             |
+| `close()`                | The window is closing. Release everything here: EventBus and settings subscriptions, timers, animation frames, observers, object URLs, document-level listeners. |
+
+`this.appManager` lets an application open other applications;
+applications never call WindowManager directly. Window titles are
+updated with `this.appManager.updateWindowTitle(this.windowId, title)`.
+
+Long-lived state that must outlive a window belongs in a service in
+`src/core/` (as Calendar and Clock do), not in the application, so
+closing a window never stops a reminder, alarm, or timer.
+
+### Notes
+
+Notes are files: each note is a `.note` document in
+`/Documents/Notes`, created, renamed, and deleted through the VFS, so
+notes also appear (and can be managed) in File Explorer. The sidebar
+lists the library with live search over titles and content; files
+opened from elsewhere (`.txt`, `.md`, or a `.note` outside the
+library) are listed under _Opened files_.
+
+- **Editing.** `.note` files use a rich editor: paragraphs, three
+  heading levels, bold, italic, underline, strikethrough, bulleted
+  and numbered lists, checklists, and links (Ctrl + click opens a
+  link). `.txt` and `.md` files are edited as plain text and saved
+  back as plain text; Markdown is not rendered.
+- **Saving.** Changes save automatically 0.8 s after typing stops and
+  when the note is switched or the window closes; Ctrl + S saves at
+  once. The header shows _Unsaved changes_, _Saving…_, _Saved_, or an
+  error with a retry button.
+- **Drafts.** While a change is unsaved, a draft is mirrored to
+  `StorageService` (`notes:draft:<entryId>`). If BrowserOS is closed
+  before the save completes, the note offers _Restore_ / _Discard_ the
+  next time it opens. Drafts older than the file are discarded.
+- **External changes.** Renames, moves, edits, and deletions made in
+  File Explorer, Terminal, or another window are followed live. A note
+  deleted while open stays on screen, read-only, with _Save as new
+  note_.
+- **Single window.** Opening another note or text file switches the
+  open Notes window to it after saving the current document.
+- **Safety.** Note HTML is passed through an allowlist sanitizer
+  (`src/apps/notes/noteFormat.js`) on load and on paste: only
+  formatting elements survive, every attribute except checklist state
+  and `http`, `https`, and `mailto` link targets is removed, and
+  scripts, images, styles, and event handlers never reach the page.
+
+`.note` format:
+
+```json
+{ "format": "browseros-note", "version": 1, "html": "<h1>Title</h1><p>…</p>" }
+```
+
+A `.note` file that is not valid JSON in this format is opened as
+plain paragraphs, with a notice. Notes saved by earlier releases in
+`localStorage` are moved into the library on first launch.
+
+### Calculator
+
+Standard and scientific modes, both evaluated by a recursive-descent
+parser (`src/apps/calculator/expression.js`); `eval` and `Function` are
+never used.
+
+- Operators `+ − × ÷ ^ mod`, parentheses (unclosed ones are closed
+  automatically), implicit multiplication (`2π`, `3(4+5)`), factorial,
+  `E` for "times ten to the power", and percent: `200 + 10%` is 220,
+  `50 × 10%` is 5.
+- Functions: `sin cos tan asin acos atan sqrt cbrt ln log abs exp`,
+  constants `π` (`pi`) and `e`, and `Ans` for the previous result.
+  Trigonometry works in degrees or radians.
+- Errors (division by zero, domain errors, overflow, malformed input)
+  are shown in place of the result; the expression stays editable.
+- Results are shown with up to 15 significant digits.
+- The keyboard accepts digits, operators, parentheses, and letters for
+  function names (`sin`, `sqrt`, `pi`, `ans`, `mod`); `x` multiplies
+  unless it continues a name such as `exp`, and capital `E` is the
+  exponent operator.
+- History keeps the last 50 calculations (`calculator:history`),
+  shared by every Calculator window; selecting an entry reuses its
+  result. Mode, angle unit, and history visibility are remembered
+  (`calculator:preferences`).
+
+### Calendar
+
+Month, week, and day views; create, edit, and delete events; all-day
+and timed events; colors; location and notes; search; and reminders.
+
+- **Data.** `calendarService` (`src/core/calendar/calendarService.js`)
+  owns events and stores them in `/Documents/Calendar/events.json`
+  through the VFS:
+
+  ```json
+  { "format": "browseros-calendar", "version": 1, "events": [ { "id": "…", "title": "Team sync",
+    "allDay": false, "start": "2026-11-06T10:00", "end": "2026-11-06T11:00", "color": "violet",
+    "location": "", "description": "", "reminder": 10, "recurrence": null, "exceptions": [] } ] }
+  ```
+
+  Times are local wall-clock times (`YYYY-MM-DDTHH:mm`, or
+  `YYYY-MM-DD` for all-day events), so an event stays at 10:00 when
+  the device's time zone changes. Every stored event is validated on
+  load; invalid entries are skipped. A file that can't be read at all
+  is renamed `events (unreadable <timestamp>).json` and kept, and a new
+  calendar starts. Writes are queued; if a write fails, the change is
+  rolled back and an error is shown.
+- **Recurrence.** Daily, weekly, monthly, or yearly with an interval,
+  ending never, on a date, or after a number of occurrences.
+  Occurrences are computed on demand for the visible range; a monthly
+  event on the 31st skips months without one. Editing or deleting one
+  occurrence asks whether to change _this event_ (stored as an
+  exception plus, for edits, a separate event) or _all events_.
+- **Reminders.** None, at start, or 5, 10, 15, 30, 60 minutes or one
+  day before. Reminders fire as notifications while BrowserOS is
+  open, whether or not Calendar is, and are checked at least once a
+  minute and whenever the page becomes visible again. Each occurrence's
+  reminder fires once (`calendar:firedReminders`); reminders that came
+  due while BrowserOS was closed are not shown later.
+- **API.** `await calendarService.ready()`, `getEvents()`,
+  `getEvent(id)`, `getOccurrences(from, to)`, `search(query)`,
+  `create(data)`, `update(id, changes)`, `remove(id)`,
+  `excludeOccurrence(id, dateKey)`, `detachOccurrence(id, dateKey, data)`.
+  `appManager.launch("calendar", { date: "2026-12-24" })` or
+  `{ eventId }` opens Calendar at a date or event.
+
+### Clock
+
+World clock, alarms, stopwatch, and timer. `clockService`
+(`src/core/clock/clockService.js`) owns all state and scheduling, so
+alarms and timers keep working with the Clock window closed.
+
+- **World clock.** Local time plus any number of cities, searched by
+  city, country, or any IANA time zone the browser supports. Times
+  come from `Intl.DateTimeFormat`, so daylight saving is handled by
+  the browser.
+- **Alarms.** Time, label, repeat days, and sound. A one-time alarm
+  turns itself off after ringing. A ringing alarm is a notification
+  with _Snooze 5 min_ and _Dismiss_ that stays until handled; its
+  sound repeats for up to one minute.
+- **Stopwatch and timer** are timestamp-based (`startedAt`, `endAt`),
+  not tick counters: they stay accurate in background tabs and across
+  reloads, and keep running while the window is closed. A timer that
+  ended while BrowserOS was closed is reported on the next start.
+- Storage keys: `clock:alarms`, `clock:timer`, `clock:stopwatch`,
+  `clock:worldClocks`, `clock:lastTab`.
+- `appManager.launch("clock", { tab: "timer" })` opens a specific tab
+  (`world`, `alarms`, `stopwatch`, `timer`).
+
+### Image Viewer
+
+Opens PNG, JPEG, WebP, GIF (animated), and SVG files from the VFS.
+Fit to window (default), zoom from 5% to 1600% (buttons, keyboard,
+Ctrl + wheel), drag to pan when zoomed, rotate in 90° steps, reset,
+fullscreen, and previous / next through the other images in the same
+folder. The status bar shows name, dimensions, size, type, and
+position in the folder.
+
+Viewing never modifies the file. Images are displayed through an
+`<img>` element from a Blob URL that is revoked when the image changes
+or the window closes. SVG files are displayed the same way, which
+means scripts, event handlers, and external resources inside them are
+never run or loaded. Unreadable or corrupt files show an error in the
+window. Opening a file always opens a new Image Viewer window.
+
+### Settings
 
 **Settings** opens from the Start Menu, the desktop's _Personalize_
 context-menu submenu, Ctrl + `,`, or `appManager.launch("settings")`.
@@ -211,13 +446,192 @@ be reset individually, and the sidebar search jumps straight to a
 section. New pages are added by registering a category in
 `src/apps/settings/settingsCategories.js`.
 
+## Files and file associations
+
+### Opening files
+
+`openVfsEntry(entry, { appManager, recentFilesService, appId? })` in
+`src/core/vfs/vfsOpener.js` is the only code path that opens a file or
+folder. Desktop (double-click / Enter / _Open with_), File Explorer
+(double-click / Enter / _Open with_), Start Menu (recent files and
+search results), and Terminal (`open <path>`, `explorer [path]`) all
+call it. It:
+
+1. opens folders in File Explorer;
+2. records the file in Recent Files;
+3. launches the handler (`appId` if given, otherwise the default from
+   `fileAssociations`) with `{ path }`, and emits
+   `application:fileOpened`;
+4. shows the file's properties when no application handles its type.
+
+`buildOpenWithItems(entry, onChoose)` produces the _Open with_
+submenu entries, so Desktop and File Explorer always offer the same
+choices.
+
+### Association registry
+
+```js
+fileAssociations.getDefault(entryOrExtension); // { appId, label, extensions } | null
+fileAssociations.getHandlers(entryOrExtension); // every handler, default first
+fileAssociations.getExtensionsFor("image-viewer"); // ["png", "jpg", …]
+fileAssociations.getIcon(entry); // type glyph shared by Desktop and File Explorer
+const unregister = fileAssociations.register({ appId: "my-app", label: "My App", extensions: ["csv"] });
+```
+
+The first registration for an extension is its default; later ones
+become _Open with_ alternatives. Changes emit
+`fileAssociations:changed`.
+
+### Text and binary content
+
+Text files (`.txt`, `.md`, `.note`, `.svg`, `.json`, `.csv`, …) are
+stored as strings and read with `vfs.read(path)` / written with
+`vfs.write(path, text)`. Raster images (`png`, `jpg`, `jpeg`, `webp`,
+`gif`) are stored as Blobs in IndexedDB:
+
+```js
+const blob = await vfs.readBinary("/Pictures/photo.png"); // Blob with the right MIME type
+await vfs.writeBinary("/Pictures/photo.png", blob); // binary extensions only
+await vfs.createFile("/Pictures/new.png", blob); // create with binary content
+```
+
+Passing a Blob to a text file, or text to `writeBinary`, fails with
+`VfsError` code `INVALID_CONTENT`; reading binary content that was
+never stored (entries created by older releases) fails with
+`NO_CONTENT`.
+
+### Importing files
+
+File Explorer's _Import…_ button, and dropping files from the host
+operating system onto a File Explorer window or the desktop, copy
+files into the VFS (`src/core/vfs/fileImport.js`). Supported: the
+image types above and `txt`, `md`, `note`, `svg`, `json`, `csv`, up to
+25 MB each. Existing names get a numbered suffix (`photo (2).png`);
+unsupported or oversized files are skipped and listed in a dialog.
+
+On first start, `/Pictures/Sample Pictures` is created with three
+generated PNG images and one SVG.
+
+## Shared services
+
+### Notifications
+
+```js
+const handle = notificationService.notify({
+  title: "Timer finished",
+  body: "5:00",
+  icon: "⏱",
+  source: "clock",
+  urgency: "normal", // "alarm": announced assertively and never auto-dismissed
+  timeout: 8000, // 0 keeps it until dismissed
+  sound: "chime", // chime | bell | digital | soft | none
+  loopSound: false, // repeat until dismissed
+  actions: [{ id: "restart", label: "Restart" }, { id: "dismiss", label: "Dismiss", primary: true }],
+  onAction: (actionId) => {},
+  onDismiss: (reason) => {}, // "user" | "timeout" | "action" | "programmatic"
+});
+handle.dismiss();
+```
+
+Notifications stack above the taskbar (at most four regular ones;
+alarms are never pushed out), pause their timeout while hovered or
+focused, and use `role="status"` or, for alarms, `role="alert"`.
+Sounds are synthesized with the Web Audio API
+(`src/utils/alertSound.js`); browsers only allow audio after the user
+has interacted with the page, so before that, alerts are visual only.
+
+### Dialogs
+
+All modal UI is built on `openDialog()` (`src/components/dialog/dialog.js`),
+which provides the backdrop, focus trap, Escape / Enter handling,
+focus restoration, and theming. Ready-made helpers:
+
+| Helper                    | Returns                                     |
+| ------------------------- | ------------------------------------------- |
+| `showConfirmDialog()`     | `true` / `false`                            |
+| `showPromptDialog()`      | the entered string, or `null` (with optional `validate`) |
+| `showMessageDialog()`     | resolves when acknowledged                  |
+| `showPropertiesDialog()`  | resolves when closed                        |
+| `showFolderPickerDialog()`| a folder path, or `null`                    |
+
+Custom forms pass their own content element plus `onBeforeClose`
+(return `false` to keep the dialog open, e.g. after a validation
+error) and use the shared `.dialog__form`, `.dialog__field`,
+`.dialog__input`, `.dialog__select`, and `.dialog__error` classes.
+
+## Persistence
+
+| Data                             | Where                                                    |
+| -------------------------------- | -------------------------------------------------------- |
+| Files, folders, notes, images    | VFS (IndexedDB), including `/Documents/Notes/*.note`     |
+| Calendar events                  | VFS: `/Documents/Calendar/events.json`                   |
+| Note drafts                      | StorageService: `notes:draft:<entryId>`                  |
+| Calculator history / preferences | StorageService: `calculator:history`, `calculator:preferences` |
+| Fired calendar reminders         | StorageService: `calendar:firedReminders` (pruned after 3 days) |
+| Alarms, timer, stopwatch, cities | StorageService: `clock:*`                                |
+| Settings                         | StorageService: `settings`                               |
+
+StorageService (`src/core/storage.js`) stores JSON in localStorage and
+prefixes every key with `browseros:` (so `calculator:history` is
+stored as `browseros:calculator:history`). Each service validates
+what it loads and falls back to defaults for anything malformed, so
+damaged storage never prevents BrowserOS from starting.
+
+## Events reference
+
+| Event                                                       | Payload                               |
+| ----------------------------------------------------------- | ------------------------------------- |
+| `application:fileOpened`                                    | `{ appId, path, entryId }`            |
+| `fileAssociations:changed`                                  | `{ appId }`                           |
+| `explorer:filesImported`                                    | `{ path, count, skipped }`            |
+| `notes:created` / `notes:updated` / `notes:deleted`         | `{ id, path, title }`                 |
+| `calculator:historyChanged`                                 | `{ source }`                          |
+| `calendar:ready`                                            | `{}`                                  |
+| `calendar:eventCreated` / `calendar:eventDeleted`           | `{ event }`                           |
+| `calendar:eventUpdated`                                     | `{ event, previous }`                 |
+| `calendar:changed`                                          | `{ reason }`                          |
+| `calendar:reminder`                                         | `{ event, occurrenceId, start }`      |
+| `clock:alarmTriggered`                                      | `{ alarm }`                           |
+| `clock:timerCompleted`                                      | `{ durationMs }`                      |
+| `clock:alarmsChanged` / `timerChanged` / `stopwatchChanged` / `worldClocksChanged` | `{}`   |
+| `notification:shown`                                        | `{ id, title, source }`               |
+| `notification:action`                                       | `{ id, actionId, source }`            |
+| `notification:dismissed`                                    | `{ id, source, reason }`              |
+
+VFS changes are announced as `filesystem:fileCreated`,
+`filesystem:fileModified`, `filesystem:fileRenamed`,
+`filesystem:fileMoved`, `filesystem:fileCopied`,
+`filesystem:fileDeleted`, and `filesystem:folderCreated`; applications
+that show files subscribe to these instead of polling.
+
 ## Known limitations
 
+- Reminders, alarms, timers, and notifications only work while
+  BrowserOS is open in a browser tab. Nothing is delivered while it is
+  closed, and the operating system's notification center is not used.
+  At the next start, one-time alarms and timers that came due are
+  reported as missed; missed repeating alarms and calendar reminders
+  are not.
+- Background tabs may delay an alarm or reminder by up to about a
+  minute, because browsers throttle timers in hidden pages.
+- Alert sounds play only after the user has interacted with the page
+  (browser autoplay policy).
+- Calendar events use local wall-clock time with no per-event time
+  zone. Recurrence supports a fixed interval of days, weeks, months, or
+  years; rules such as "every second Tuesday" are not available.
+  There is no import or export (iCalendar).
+- The Notes rich editor uses the browser's built-in editing commands
+  (`document.execCommand`). Notes can't contain images or tables, and
+  Markdown is edited as plain text.
+- Calculator arithmetic uses double-precision floating point (about
+  15 significant digits).
+- Image Viewer displays images only; rotation is not saved, and BMP,
+  AVIF, HEIC, and other formats are not supported.
 - Wallpapers are a curated set of generated backgrounds; uploading
   images is not supported.
 - The VFS has no permanent deletion: deleting always moves items to
   `/Trash`, so there is no "confirm permanent delete" preference.
-- Undo (Ctrl + Z) is not implemented, so it is not offered as a
-  shortcut.
-- Settings are stored per browser profile (localStorage); there is no
-  import/export or sync.
+- File operations on the Desktop and in File Explorer can't be undone;
+  undo and redo are available for text in Notes.
+- Settings and application data are stored per browser profile; there
+  is no import/export or sync.

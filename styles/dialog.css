@@ -37,6 +37,19 @@
               transform var(--duration-normal) var(--ease-standard);
 }
 
+/* Wider panel for form dialogs (event editor, folder picker). */
+.dialog--wide {
+  width: min(560px, calc(100vw - var(--space-6)));
+  max-height: calc(100vh - var(--space-7));
+  display: flex;
+  flex-direction: column;
+}
+
+.dialog--wide .dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .dialog--visible {
   opacity: 1;
   transform: scale(1) translateY(0);
@@ -104,6 +117,108 @@
 
 .dialog__button--danger:hover {
   filter: brightness(1.1);
+}
+
+.dialog__message--detail {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+/* ---- Form fields (prompt and form dialogs) ---- */
+.dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dialog__form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.dialog__form-row > .dialog__field {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.dialog__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.dialog__field[hidden],
+.dialog__form-row[hidden] {
+  display: none;
+}
+
+.dialog__field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dialog__label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.dialog__input,
+.dialog__select,
+.dialog__textarea {
+  width: 100%;
+  min-height: 34px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-surface-glass-border-strong);
+  background: var(--color-surface-inset);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color-scheme: inherit;
+}
+
+.dialog__textarea {
+  min-height: 72px;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.dialog__input:focus-visible,
+.dialog__select:focus-visible,
+.dialog__textarea:focus-visible {
+  outline: none;
+  border-color: var(--color-accent-primary);
+  box-shadow: 0 0 0 3px var(--color-accent-ring-soft);
+}
+
+.dialog__input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+.dialog__input:disabled {
+  opacity: 0.5;
+}
+
+.dialog__select option {
+  background: var(--color-window-bg-solid);
+  color: var(--color-text-primary);
+}
+
+.dialog__error {
+  margin: 0;
+  min-height: 1em;
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+}
+
+.dialog__error:empty {
+  display: none;
 }
 
 /* ---- Properties list ---- */

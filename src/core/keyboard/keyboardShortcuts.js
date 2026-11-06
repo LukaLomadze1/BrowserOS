@@ -45,6 +45,9 @@ const KEY_LABELS = Object.freeze({
   Enter: "Enter",
   Tab: "Tab",
   " ": "Space",
+  PageUp: "Page Up",
+  PageDown: "Page Down",
+  Backspace: "Backspace",
 });
 
 const CODE_LABELS = Object.freeze({ Backquote: "`" });
@@ -333,7 +336,8 @@ export function formatCombo(combo) {
   if (combo.alt) parts.push(IS_MAC ? "\u2325" : "Alt");
   if (combo.shift) parts.push("Shift");
   if (combo.code) {
-    parts.push(CODE_LABELS[combo.code] ?? combo.code);
+    const generic = /^(?:Digit|Key)(.)$/.exec(combo.code);
+    parts.push(CODE_LABELS[combo.code] ?? (generic ? generic[1] : combo.code));
   } else {
     parts.push(KEY_LABELS[combo.key] ?? (combo.key.length === 1 ? combo.key.toUpperCase() : combo.key));
   }

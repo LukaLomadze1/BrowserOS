@@ -21,7 +21,7 @@
  * and for the same reason: an async re-render here would race
  * against the very createFolder() call that triggered it.
  *
- * Selection + focus (Step 9 fix): a rectangle (marquee) selection
+ * Selection + focus: a rectangle (marquee) selection
  * never makes any row the pointerdown target, so nothing about it
  * triggers the browser's native "click focuses this element"
  * behavior — and that behavior isn't guaranteed cross-browser anyway
@@ -55,7 +55,10 @@ import { ExplorerView } from "./explorerView.js";
 import { ContextMenu } from "../../components/context-menu/contextMenu.js";
 import { showConfirmDialog } from "../../components/dialog/confirmDialog.js";
 import { showPropertiesDialog } from "../../components/dialog/propertiesDialog.js";
-import { openVfsEntry } from "../../core/vfs/vfsOpener.js";
+import { openVfsEntry, buildOpenWithItems } from "../../core/vfs/vfsOpener.js";
+import { importHostFiles } from "../../core/vfs/fileImport.js";
+import { fileAssociations } from "../../core/fileAssociations.js";
+import { showMessageDialog } from "../../components/dialog/messageDialog.js";
 import { pasteClipboard } from "../../core/vfs/clipboardPaste.js";
 import { getParentPath } from "../../core/vfs/pathResolver.js";
 import { generateDefaultName, splitNameForRename } from "../../utils/nameGenerator.js";
@@ -123,6 +126,7 @@ class ExplorerManager {
       onSearchInput: (value) => this._handleSearchInput(value),
       onSearchRecursiveToggle: (checked) => this._handleSearchRecursiveToggle(checked),
       onSidebarNavigate: (path) => this.navigate(path),
+      onImportFiles: (files) => this._importFiles(files),
     });
 
     this._contextMenu = new ContextMenu();
@@ -383,6 +387,7 @@ class ExplorerManager {
       canUp: this._path !== HOME_PATH && this._path !== FAVORITES_PATH && this._path !== "/",
     });
     this._view.setBreadcrumbs(this._buildBreadcrumbs());
+    this._view.setImportEnabled(this._path !== HOME_PATH && this._path !== FAVORITES_PATH && !this._isInTrash(this._path));
     this._view.setAddressMode("breadcrumbs");
     this._addressEditing = false;
     this._view.setActiveSidebarPath(this._path);
@@ -514,6 +519,7 @@ class ExplorerManager {
       _selected: this._selection.has(entry.id),
       _cut: this._clipboardService.isCut(entry.id),
       _displayName: this._displayName(entry),
+      _icon: fileAssociations.getIcon(entry),
       _typeLabel: entry.type === "folder" ? "Folder" : entry.extension ? `${entry.extension.toUpperCase()} File` : "File",
       _sizeLabel: entry.type === "folder" ? "" : formatBytes(entry.size),
       _modifiedLabel: formatDate(entry.modifiedAt),
@@ -946,6 +952,52 @@ class ExplorerManager {
   }
 
   /**
+   * @param {object} entry
+   * @param {string} appId
+   * @returns {Promise<void>}
+   */
+  async _openWith(entry, appId) {
+    try {
+      await openVfsEntry(entry, { appManager: this._appManager, recentFilesService: this._recentFilesService, appId });
+    } catch (error) {
+      await this._showErrorDialog("Couldn't open item", error.message);
+    }
+  }
+
+  /**
+   * Copy files from the host computer into the current folder.
+   * @param {File[]} files
+   * @returns {Promise<void>}
+   */
+  async _importFiles(files) {
+    if (this._path === HOME_PATH || this._path === FAVORITES_PATH || this._isInTrash(this._path)) {
+      await showMessageDialog({ title: "Can't import here", message: "Open a folder first, then import files into it." });
+      return;
+    }
+    let result;
+    try {
+      result = await importHostFiles(this._vfs, this._path, files);
+    } catch (error) {
+      await showMessageDialog({ title: "Import failed", message: "The files could not be imported.", detail: error.message });
+      return;
+    }
+    const { imported, skipped } = result;
+    if (imported.length > 0) {
+      this._selection = new Set(imported.map((entry) => entry.id));
+      this._applySelectionToRows();
+      this._updateStatus();
+    }
+    eventBus.emit("explorer:filesImported", Object.freeze({ path: this._path, count: imported.length, skipped: skipped.length }));
+    if (skipped.length > 0) {
+      await showMessageDialog({
+        title: imported.length > 0 ? "Some files weren't imported" : "No files were imported",
+        message: `Supported: images (PNG, JPEG, WebP, GIF, SVG) and text files (TXT, MD, NOTE, JSON, CSV). ${imported.length} imported, ${skipped.length} skipped.`,
+        detail: skipped.map((item) => `${item.name}: ${item.reason}`).join("\n"),
+      });
+    }
+  }
+
+  /**
    * @param {string} path
    * @returns {Promise<void>}
    */
@@ -1273,6 +1325,8 @@ class ExplorerManager {
     if (isSingle && entry.type === "folder") {
       items.push({ label: "Open in New Window", action: () => this._openInNewWindow(entry.path) });
     }
+    const openWith = isSingle ? buildOpenWithItems(entry, (appId) => this._openWith(entry, appId)) : [];
+    if (openWith.length > 0) items.push({ label: "Open with", submenu: openWith });
     items.push(
       { separator: true },
       { label: "Rename", disabled: !isSingle, action: () => this._startRename(entry?.id) },

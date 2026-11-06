@@ -57,7 +57,7 @@ export const WALLPAPER_PRESETS = Object.freeze([
 ]);
 
 /** Apps pinned to the Start Menu on first boot and after a reset. */
-export const DEFAULT_PINNED_APP_IDS = Object.freeze(["about", "calculator", "notes", "settings", "recycle-bin"]);
+export const DEFAULT_PINNED_APP_IDS = Object.freeze(["notes", "calendar", "calculator", "clock", "file-explorer", "settings", "about", "recycle-bin"]);
 
 const CONFIRM_TRASH_VALUES = ["always", "smart", "never"];
 

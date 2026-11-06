@@ -38,6 +38,7 @@ class ExplorerView {
    * @param {(value: string) => void} callbacks.onSearchInput
    * @param {(checked: boolean) => void} callbacks.onSearchRecursiveToggle
    * @param {(path: string) => void} callbacks.onSidebarNavigate
+   * @param {(files: File[]) => void} callbacks.onImportFiles - Files chosen with Import or dropped onto the list.
    */
   constructor(callbacks) {
     this._callbacks = callbacks;
@@ -60,6 +61,15 @@ class ExplorerView {
   // ---------------------------------------------------------------
   // Toolbar
   // ---------------------------------------------------------------
+
+  /**
+   * Import is only possible into real folders, not Home or Favorites.
+   * @param {boolean} enabled
+   * @returns {void}
+   */
+  setImportEnabled(enabled) {
+    this._importButton.disabled = !enabled;
+  }
 
   /**
    * @param {{canBack: boolean, canForward: boolean, canUp: boolean}} state
@@ -253,7 +263,7 @@ class ExplorerView {
    * @returns {HTMLElement}
    */
   _buildRow(item, rowCallbacks) {
-    const icon = item.type === "folder" ? "\u25a4" : "\u25a2";
+    const icon = item._icon ?? (item.type === "folder" ? "\u25a4" : "\u25a2");
     const classNames = ["explorer__row"];
     if (item._selected) classNames.push("explorer__row--selected");
     if (item._cut) classNames.push("explorer__row--cut");
@@ -442,7 +452,7 @@ class ExplorerView {
                 createElement("span", {
                   className: "explorer__row-icon",
                   attrs: { "aria-hidden": "true" },
-                  text: entry.type === "folder" ? "\u25a4" : "\u25a2",
+                  text: entry._icon ?? (entry.type === "folder" ? "\u25a4" : "\u25a2"),
                 }),
                 createElement("span", { className: "explorer__row-name", text: entry.name }),
                 createElement("span", { className: "explorer__row-type", text: entry.path }),
@@ -546,9 +556,25 @@ class ExplorerView {
       children: [this._viewModeButtons.grid, this._viewModeButtons.list, this._viewModeButtons.details],
     });
 
+    this._importInput = createElement("input", {
+      className: "explorer__import-input",
+      attrs: { type: "file", multiple: "", tabindex: "-1", "aria-hidden": "true" },
+      on: {
+        change: () => {
+          const files = [...this._importInput.files];
+          this._importInput.value = "";
+          if (files.length > 0) this._callbacks.onImportFiles(files);
+        },
+      },
+    });
+    this._importButton = this._actionButton("Import\u2026", () => this._importInput.click());
+    this._importButton.title = "Copy files from this computer into the current folder";
+
     const actionsGroup = createElement("div", {
       className: "explorer__toolbar-actions",
       children: [
+        this._importButton,
+        this._importInput,
         this._actionButton("New Folder", () => this._callbacks.onNewFolder()),
         this._actionButton("New Document", () => this._callbacks.onNewTextDocument()),
         this._actionButton("Copy", () => this._callbacks.onCopy()),
@@ -581,6 +607,23 @@ class ExplorerView {
     this._listEl = createElement("div", {
       className: "explorer__list explorer__list--grid",
       attrs: { role: "list", "aria-label": "Folder contents", tabindex: "0" },
+    });
+    // Files dragged in from the host computer are imported here.
+    this._listEl.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+      this._listEl.classList.add("explorer__list--drop-target");
+    });
+    this._listEl.addEventListener("dragleave", (e) => {
+      if (!this._listEl.contains(e.relatedTarget)) this._listEl.classList.remove("explorer__list--drop-target");
+    });
+    this._listEl.addEventListener("drop", (e) => {
+      this._listEl.classList.remove("explorer__list--drop-target");
+      const files = [...(e.dataTransfer?.files ?? [])];
+      if (files.length === 0) return;
+      e.preventDefault();
+      this._callbacks.onImportFiles(files);
     });
 
     const main = createElement("div", { className: "explorer__main", children: [this._detailsHeaderEl, this._listEl] });

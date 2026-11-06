@@ -63,3 +63,13 @@ export function clearElement(el) {
     el.removeChild(el.firstChild);
   }
 }
+
+/**
+ * @param {KeyboardEvent} event
+ * @returns {boolean} True while Ctrl, Alt, Meta or Shift is held: the key
+ *   press belongs to a shortcut or a text selection, not to plain list or
+ *   tab navigation, so components should let it through untouched.
+ */
+export function hasModifierKey(event) {
+  return event.ctrlKey || event.altKey || event.metaKey || event.shiftKey;
+}

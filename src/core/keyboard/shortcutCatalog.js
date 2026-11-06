@@ -48,12 +48,22 @@ export const SHORTCUT_CATEGORIES = Object.freeze([
   Object.freeze({ id: "fileExplorer", label: "File Explorer" }),
   Object.freeze({ id: "terminal", label: "Terminal" }),
   Object.freeze({ id: "startMenu", label: "Start Menu" }),
+  Object.freeze({ id: "notes", label: "Notes" }),
+  Object.freeze({ id: "calculator", label: "Calculator" }),
+  Object.freeze({ id: "calendar", label: "Calendar" }),
+  Object.freeze({ id: "clock", label: "Clock" }),
+  Object.freeze({ id: "imageViewer", label: "Image Viewer" }),
 ]);
 
 const DESKTOP_CONTEXT = "Desktop icons focused";
 const EXPLORER_CONTEXT = "File Explorer focused";
 const TERMINAL_CONTEXT = "Terminal input";
 const START_CONTEXT = "Start Menu open";
+const NOTES_CONTEXT = "Notes window";
+const NOTES_EDITOR_CONTEXT = "Notes editor (rich notes)";
+const CALCULATOR_CONTEXT = "Calculator window";
+const CALENDAR_CONTEXT = "Calendar window";
+const VIEWER_CONTEXT = "Image Viewer window";
 
 /**
  * @typedef {object} KeyCombo
@@ -244,6 +254,56 @@ export const SHORTCUT_DEFINITIONS = deepFreeze([
   { id: "startMenu.launchFirst", category: "startMenu", description: "Open the first search result", context: "Start Menu search box", combos: [{ key: "Enter", loose: true }], scope: "local" },
   { id: "startMenu.next", category: "startMenu", description: "Move to the next item", context: START_CONTEXT, combos: [{ key: "ArrowDown", loose: true }, { key: "ArrowRight", loose: true }], scope: "local" },
   { id: "startMenu.previous", category: "startMenu", description: "Move to the previous item", context: START_CONTEXT, combos: [{ key: "ArrowUp", loose: true }, { key: "ArrowLeft", loose: true }], scope: "local" },
+
+  // ---- Notes ----
+  { id: "notes.newNote", category: "notes", description: "New note", context: NOTES_CONTEXT, combos: [{ key: "n", ctrl: true, alt: true }], scope: "local" },
+  { id: "notes.save", category: "notes", description: "Save now (notes also save automatically)", context: NOTES_CONTEXT, combos: [{ key: "s", mod: true }], scope: "local" },
+  { id: "notes.search", category: "notes", description: "Search notes", context: NOTES_CONTEXT, combos: [{ key: "f", mod: true }], scope: "local" },
+  { id: "notes.undo", category: "notes", description: "Undo", context: NOTES_CONTEXT, combos: [{ key: "z", mod: true }], scope: "local" },
+  { id: "notes.redo", category: "notes", description: "Redo", context: NOTES_CONTEXT, combos: [{ key: "y", mod: true }, { key: "z", mod: true, shift: true }], scope: "local" },
+  { id: "notes.bold", category: "notes", description: "Bold", context: NOTES_EDITOR_CONTEXT, combos: [{ key: "b", mod: true }], scope: "local" },
+  { id: "notes.italic", category: "notes", description: "Italic", context: NOTES_EDITOR_CONTEXT, combos: [{ key: "i", mod: true }], scope: "local" },
+  { id: "notes.underline", category: "notes", description: "Underline", context: NOTES_EDITOR_CONTEXT, combos: [{ key: "u", mod: true }], scope: "local" },
+  { id: "notes.strike", category: "notes", description: "Strikethrough", context: NOTES_EDITOR_CONTEXT, combos: [{ key: "x", mod: true, shift: true }], scope: "local" },
+  { id: "notes.link", category: "notes", description: "Insert or edit a link", context: NOTES_EDITOR_CONTEXT, combos: [{ key: "k", mod: true }], scope: "local" },
+  { id: "notes.numberedList", category: "notes", description: "Numbered list", context: NOTES_EDITOR_CONTEXT, combos: [{ code: "Digit7", mod: true, shift: true }], scope: "local" },
+  { id: "notes.bulletList", category: "notes", description: "Bulleted list", context: NOTES_EDITOR_CONTEXT, combos: [{ code: "Digit8", mod: true, shift: true }], scope: "local" },
+  { id: "notes.checklist", category: "notes", description: "Checklist", context: NOTES_EDITOR_CONTEXT, combos: [{ code: "Digit9", mod: true, shift: true }], scope: "local" },
+  { id: "notes.heading1", category: "notes", description: "Heading 1", context: NOTES_EDITOR_CONTEXT, combos: [{ code: "Digit1", ctrl: true, alt: true }], scope: "local" },
+  { id: "notes.heading2", category: "notes", description: "Heading 2", context: NOTES_EDITOR_CONTEXT, combos: [{ code: "Digit2", ctrl: true, alt: true }], scope: "local" },
+  { id: "notes.heading3", category: "notes", description: "Heading 3", context: NOTES_EDITOR_CONTEXT, combos: [{ code: "Digit3", ctrl: true, alt: true }], scope: "local" },
+  { id: "notes.paragraph", category: "notes", description: "Normal paragraph", context: NOTES_EDITOR_CONTEXT, combos: [{ code: "Digit0", ctrl: true, alt: true }], scope: "local" },
+
+  // ---- Calculator ----
+  { id: "calculator.evaluate", category: "calculator", description: "Calculate the result", context: CALCULATOR_CONTEXT, combos: [{ key: "Enter" }, { key: "=", loose: true }], scope: "local" },
+  { id: "calculator.clear", category: "calculator", description: "Clear the expression", context: CALCULATOR_CONTEXT, combos: [{ key: "Escape" }, { key: "Delete" }], scope: "local" },
+  { id: "calculator.backspace", category: "calculator", description: "Delete the last entry", context: CALCULATOR_CONTEXT, combos: [{ key: "Backspace" }], scope: "local" },
+  { id: "calculator.copy", category: "calculator", description: "Copy the result", context: CALCULATOR_CONTEXT, combos: [{ key: "c", mod: true }], scope: "local" },
+
+  // ---- Calendar ----
+  { id: "calendar.today", category: "calendar", description: "Go to today", context: CALENDAR_CONTEXT, combos: [{ key: "t" }], scope: "local" },
+  { id: "calendar.previous", category: "calendar", description: "Previous month, week, or day", context: CALENDAR_CONTEXT, combos: [{ key: "PageUp" }], scope: "local" },
+  { id: "calendar.next", category: "calendar", description: "Next month, week, or day", context: CALENDAR_CONTEXT, combos: [{ key: "PageDown" }], scope: "local" },
+  { id: "calendar.newEvent", category: "calendar", description: "New event", context: CALENDAR_CONTEXT, combos: [{ key: "n" }], scope: "local" },
+  { id: "calendar.monthView", category: "calendar", description: "Month view", context: CALENDAR_CONTEXT, combos: [{ key: "m" }], scope: "local" },
+  { id: "calendar.weekView", category: "calendar", description: "Week view", context: CALENDAR_CONTEXT, combos: [{ key: "w" }], scope: "local" },
+  { id: "calendar.dayView", category: "calendar", description: "Day view", context: CALENDAR_CONTEXT, combos: [{ key: "d" }], scope: "local" },
+
+  // ---- Clock ----
+  { id: "clock.startStop", category: "clock", description: "Start or pause the stopwatch or timer", context: "Stopwatch or Timer tab", combos: [{ key: " " }], scope: "local" },
+  { id: "clock.lap", category: "clock", description: "Record a lap", context: "Stopwatch tab", combos: [{ key: "l" }], scope: "local" },
+
+  // ---- Image Viewer ----
+  { id: "imageViewer.previous", category: "imageViewer", description: "Previous image in the folder", context: VIEWER_CONTEXT, combos: [{ key: "ArrowLeft" }], scope: "local" },
+  { id: "imageViewer.next", category: "imageViewer", description: "Next image in the folder", context: VIEWER_CONTEXT, combos: [{ key: "ArrowRight" }], scope: "local" },
+  { id: "imageViewer.zoomIn", category: "imageViewer", description: "Zoom in", context: VIEWER_CONTEXT, combos: [{ key: "+" }, { key: "+", shift: true }, { key: "=" }], scope: "local" },
+  { id: "imageViewer.zoomOut", category: "imageViewer", description: "Zoom out", context: VIEWER_CONTEXT, combos: [{ key: "-" }], scope: "local" },
+  { id: "imageViewer.fit", category: "imageViewer", description: "Fit to window", context: VIEWER_CONTEXT, combos: [{ key: "0" }], scope: "local" },
+  { id: "imageViewer.actualSize", category: "imageViewer", description: "Actual size (100%)", context: VIEWER_CONTEXT, combos: [{ key: "1" }], scope: "local" },
+  { id: "imageViewer.rotateRight", category: "imageViewer", description: "Rotate clockwise", context: VIEWER_CONTEXT, combos: [{ key: "r" }], scope: "local" },
+  { id: "imageViewer.rotateLeft", category: "imageViewer", description: "Rotate counter-clockwise", context: VIEWER_CONTEXT, combos: [{ key: "r", shift: true }], scope: "local" },
+  { id: "imageViewer.reset", category: "imageViewer", description: "Reset zoom and rotation", context: VIEWER_CONTEXT, combos: [{ key: "Home" }], scope: "local" },
+  { id: "imageViewer.fullscreen", category: "imageViewer", description: "Toggle fullscreen", context: VIEWER_CONTEXT, combos: [{ key: "f" }], scope: "local" },
 ]);
 
 /**

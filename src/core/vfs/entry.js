@@ -12,13 +12,30 @@
 import { getExtension } from "./pathResolver.js";
 
 /**
- * Extensions this step treats as "metadata only" per the spec: their
- * content is never read or written through the VFS, only their
- * entry metadata (name, size, timestamps, etc.) is tracked. Adding a
- * new metadata-only type later is a one-line change here.
+ * Extensions whose content is binary. Their content is stored as a
+ * Blob (IndexedDB stores Blobs natively) and is read and written only
+ * through the binary API (`vfs.readBinary` / `vfs.writeBinary`); the
+ * text API (`vfs.read` / `vfs.write`) refuses them with BINARY_CONTENT.
+ * Entries created before binary content was supported have `content:
+ * null` (metadata only) and are reported as having no data.
  * @type {ReadonlySet<string>}
  */
-const BINARY_EXTENSIONS = new Set(["png", "jpg", "jpeg"]);
+const BINARY_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
+
+/** MIME types for extensions BrowserOS knows how to handle. */
+const MIME_TYPES = Object.freeze({
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  txt: "text/plain",
+  md: "text/markdown",
+  note: "application/vnd.browseros.note+json",
+  json: "application/json",
+  csv: "text/csv",
+});
 
 /**
  * @param {string|null} extension
@@ -26,6 +43,14 @@ const BINARY_EXTENSIONS = new Set(["png", "jpg", "jpeg"]);
  */
 export function isBinaryExtension(extension) {
   return extension !== null && BINARY_EXTENSIONS.has(extension);
+}
+
+/**
+ * @param {string|null} extension
+ * @returns {string} The MIME type for an extension, or "application/octet-stream".
+ */
+export function getMimeType(extension) {
+  return (extension && MIME_TYPES[extension]) || "application/octet-stream";
 }
 
 /**
@@ -89,8 +114,8 @@ export function createDirectoryEntry(params) {
  * @param {string} params.name
  * @param {string} params.parentId
  * @param {string} params.path
- * @param {string|null} [params.content] - Ignored (stored as null) for binary/metadata-only extensions.
- * @param {number} [params.size] - Explicit size override; required for metadata-only types since there's no content to measure.
+ * @param {string|Blob|null} [params.content] - A string for text types; a Blob for binary types (anything else is stored as null, i.e. metadata only).
+ * @param {number} [params.size] - Explicit size override; only needed for metadata-only binary entries, since content is measured otherwise.
  * @param {boolean} [params.hidden]
  * @param {boolean} [params.readOnly]
  * @param {boolean} [params.system]
@@ -113,8 +138,20 @@ export function createFileEntry(params) {
   const now = Date.now();
   const extension = getExtension(name);
   const binary = isBinaryExtension(extension);
-  const finalContent = binary ? null : content;
-  const finalSize = typeof size === "number" ? size : finalContent !== null ? byteLength(finalContent) : 0;
+  let finalContent;
+  if (binary) {
+    finalContent = content instanceof Blob ? content : null;
+  } else {
+    finalContent = typeof content === "string" ? content : content === null ? null : String(content);
+  }
+  let finalSize;
+  if (finalContent instanceof Blob) {
+    finalSize = finalContent.size;
+  } else if (typeof size === "number") {
+    finalSize = size;
+  } else {
+    finalSize = typeof finalContent === "string" ? byteLength(finalContent) : 0;
+  }
 
   return {
     id,

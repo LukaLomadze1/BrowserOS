@@ -23,9 +23,9 @@
  * selection decisions of its own — it only reports pointer/focus
  * facts (see desktopIcon.js).
  *
- * Focus (Step 9 fix): DOM focus and SelectionManager's selection set
- * are two different things, and only one of them (selection) was
- * ever guaranteed correct. A marquee (rectangle) selection never
+ * Focus: DOM focus and SelectionManager's selection set are two
+ * different things, and only selection is updated by every way of
+ * selecting icons. A marquee (rectangle) selection never
  * makes any icon the pointerdown target, so nothing about it
  * triggers the browser's native "click focuses this element"
  * behavior — and Delete/F2 rely on a keydown listener attached to
@@ -73,7 +73,9 @@ import {
   configureGrid,
   pixelsToCell,
 } from "../utils/desktopGrid.js";
-import { openVfsEntry } from "./vfs/vfsOpener.js";
+import { openVfsEntry, buildOpenWithItems } from "./vfs/vfsOpener.js";
+import { importHostFiles } from "./vfs/fileImport.js";
+import { fileAssociations } from "./fileAssociations.js";
 import { showConfirmDialog } from "../components/dialog/confirmDialog.js";
 import { showPropertiesDialog } from "../components/dialog/propertiesDialog.js";
 import { generateDefaultName, splitNameForRename } from "../utils/nameGenerator.js";
@@ -465,7 +467,7 @@ class DesktopManager {
    */
   _renderVfsIcon(entry) {
     const compositeId = this._vfsCompositeId(entry.id);
-    const icon = entry.type === "folder" ? "\u25a4" : "\u25a2";
+    const icon = fileAssociations.getIcon(entry);
     const view = new DesktopIconView({ id: compositeId, label: entry.name, icon }, this._iconCallbacks);
     this._views.set(compositeId, view);
     view.getElement().hidden = !this._isVisible(compositeId);
@@ -814,6 +816,49 @@ class DesktopManager {
     this._container.addEventListener("pointerdown", (e) => this._onContainerPointerDown(e));
     this._container.addEventListener("contextmenu", (e) => this._onContainerContextMenu(e));
     this._container.addEventListener("keydown", (e) => this._onContainerKeyDown(e));
+    // Files dragged in from the host computer are imported into /Desktop.
+    this._container.addEventListener("dragover", (e) => {
+      if (!e.dataTransfer?.types.includes("Files")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+    this._container.addEventListener("drop", (e) => this._onHostFilesDropped(e));
+  }
+
+  /**
+   * @param {DragEvent} e
+   * @returns {Promise<void>}
+   */
+  async _onHostFilesDropped(e) {
+    const files = [...(e.dataTransfer?.files ?? [])];
+    if (files.length === 0) return;
+    e.preventDefault();
+    try {
+      const { imported, skipped } = await importHostFiles(this._vfs, DESKTOP_VFS_PATH, files);
+      // filesystem:fileCreated has already rendered the new icons.
+      this._selection.setSelection(imported.map((entry) => this._vfsCompositeId(entry.id)));
+      if (skipped.length > 0) {
+        await this._showErrorDialog(
+          "Some files weren't imported",
+          skipped.map((item) => `${item.name}: ${item.reason}`).join("\n")
+        );
+      }
+    } catch (error) {
+      await this._showErrorDialog("Import failed", error.message);
+    }
+  }
+
+  /**
+   * @param {object} entry
+   * @param {string} appId
+   * @returns {Promise<void>}
+   */
+  async _openWith(entry, appId) {
+    try {
+      await openVfsEntry(entry, { appManager: this._appManager, recentFilesService: this._recentFilesService, appId });
+    } catch (error) {
+      await this._showErrorDialog("Couldn't open item", error.message);
+    }
   }
 
   /**
@@ -1053,8 +1098,11 @@ class DesktopManager {
     const canDelete = vfsEntries.length > 0;
     const canShowProperties = selectedIds.length === 1;
 
+    const singleEntry = selectedIds.length === 1 ? vfsEntries[0] ?? null : null;
+    const openWith = singleEntry ? buildOpenWithItems(singleEntry, (appId) => this._openWith(singleEntry, appId)) : [];
     const items = [
       { label: "Open", action: () => { for (const sid of selectedIds) this._openIcon(sid); } },
+      ...(openWith.length > 0 ? [{ label: "Open with", submenu: openWith }] : []),
       { separator: true },
       { label: "Rename", disabled: !canRename, action: () => this._startRename(selectedIds[0]) },
       { label: "Delete", disabled: !canDelete, action: () => this._deleteSelection() },

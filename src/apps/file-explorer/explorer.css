@@ -536,3 +536,15 @@
 .explorer__list-header-button[hidden] {
   display: none;
 }
+
+/* Hidden file picker behind the Import button. */
+.explorer__import-input {
+  display: none;
+}
+
+/* Host files dragged over the list. */
+.explorer__list--drop-target {
+  outline: 2px dashed var(--color-accent-primary);
+  outline-offset: -6px;
+  background: var(--color-accent-soft);
+}

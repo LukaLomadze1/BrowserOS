@@ -20,6 +20,16 @@
  * AppManager, the VFS, and RecentFilesService → About BrowserOS is
  * the only app auto-launched.
  *
+ * System applications: Notes, Calculator, Calendar, Clock, and Image
+ * Viewer are registered alongside the shell apps. Calendar reminders
+ * and Clock alarms/timers are owned by CalendarService and
+ * ClockService, which start right after the VFS so they keep working
+ * whether or not their windows are open. Files open in the application
+ * chosen by src/core/fileAssociations.js.
+ *
+ * Desktop shortcuts list only app ids; their names and icons come from
+ * AppManager's registry, the single source of application metadata.
+ *
  * Global keyboard shortcuts (src/core/keyboard/) are bound by the
  * subsystem that owns each behavior — WindowManager (window
  * management), DesktopManager (Escape), StartMenuManager (Win/Meta) —
@@ -72,14 +82,22 @@ import { RecentFilesService } from "./core/recentFilesService.js";
 import { clipboardService } from "./core/clipboardService.js";
 import { vfs } from "./core/vfs/virtualFileSystem.js";
 import { keyboardShortcuts } from "./core/keyboard/keyboardShortcuts.js";
+import { calendarService } from "./core/calendar/calendarService.js";
+import { clockService } from "./core/clock/clockService.js";
+import { notificationService } from "./core/notifications/notificationService.js";
+import { fileAssociations } from "./core/fileAssociations.js";
+import { seedSamplePictures } from "./core/vfs/sampleContent.js";
 
-const DESKTOP_SHORTCUTS = [
-  { id: "about", label: "About BrowserOS", icon: "\u2726", appId: "about", type: "application" },
-  { id: "calculator", label: "Calculator", icon: "\u25a6", appId: "calculator", type: "application" },
-  { id: "notes", label: "Notes", icon: "\u270e", appId: "notes", type: "application" },
-  { id: "file-explorer", label: "File Explorer", icon: "\u25a4", appId: "file-explorer", type: "application" },
-  { id: "terminal", label: "Terminal", icon: "\u276f", appId: "terminal", type: "application" },
-  { id: "recycle-bin", label: "Recycle Bin", icon: "\u267b", appId: "recycle-bin", type: "system" },
+/** App ids shown as desktop shortcuts; names and icons come from AppManager. */
+const DESKTOP_SHORTCUT_APPS = [
+  { appId: "about", type: "application" },
+  { appId: "calculator", type: "application" },
+  { appId: "notes", type: "application" },
+  { appId: "file-explorer", type: "application" },
+  { appId: "terminal", type: "application" },
+  { appId: "calendar", type: "application" },
+  { appId: "clock", type: "application" },
+  { appId: "recycle-bin", type: "system" },
 ];
 
 async function boot() {
@@ -100,27 +118,62 @@ async function boot() {
     id: "about",
     name: "About BrowserOS",
     icon: "\u2726",
+    description: "Version and system information",
+    category: "System",
     singleInstance: true,
     loader: () => import("./apps/about/main.js"),
-  });
-  appManager.register({
-    id: "calculator",
-    name: "Calculator",
-    icon: "\u25a6",
-    singleInstance: true,
-    loader: () => import("./apps/calculator/main.js"),
   });
   appManager.register({
     id: "notes",
     name: "Notes",
     icon: "\u270e",
-    singleInstance: false,
+    description: "Rich-text notes and plain-text documents",
+    category: "Productivity",
+    singleInstance: true,
     loader: () => import("./apps/notes/main.js"),
+  });
+  appManager.register({
+    id: "calendar",
+    name: "Calendar",
+    icon: "\u25a3",
+    description: "Events, recurring schedules, and reminders",
+    category: "Productivity",
+    singleInstance: true,
+    loader: () => import("./apps/calendar/main.js"),
+  });
+  appManager.register({
+    id: "calculator",
+    name: "Calculator",
+    icon: "\u25a6",
+    description: "Standard and scientific calculator with history",
+    category: "Utilities",
+    singleInstance: false,
+    loader: () => import("./apps/calculator/main.js"),
+  });
+  appManager.register({
+    id: "clock",
+    name: "Clock",
+    icon: "\u23f0",
+    description: "World clock, alarms, stopwatch, and timer",
+    category: "Utilities",
+    singleInstance: true,
+    loader: () => import("./apps/clock/main.js"),
+  });
+  appManager.register({
+    id: "image-viewer",
+    name: "Image Viewer",
+    icon: "\u25a7",
+    description: "View PNG, JPEG, WebP, GIF, and SVG images",
+    category: "Utilities",
+    singleInstance: false,
+    loader: () => import("./apps/image-viewer/main.js"),
   });
   appManager.register({
     id: "file-explorer",
     name: "File Explorer",
     icon: "\u25a4",
+    description: "Browse and manage files and folders",
+    category: "System",
     singleInstance: false,
     loader: () => import("./apps/file-explorer/main.js"),
   });
@@ -128,6 +181,8 @@ async function boot() {
     id: "terminal",
     name: "Terminal",
     icon: "\u276f",
+    description: "Command-line access to the file system",
+    category: "System",
     singleInstance: false,
     loader: () => import("./apps/terminal/main.js"),
   });
@@ -135,6 +190,8 @@ async function boot() {
     id: "settings",
     name: "Settings",
     icon: "\u2699",
+    description: "Appearance, desktop, and system preferences",
+    category: "System",
     singleInstance: true,
     loader: () => import("./apps/settings/main.js"),
   });
@@ -142,11 +199,17 @@ async function boot() {
     id: "recycle-bin",
     name: "Recycle Bin",
     icon: "\u267b",
+    description: "Items moved to Trash",
+    category: "System",
     singleInstance: true,
     loader: () => import("./apps/recycle-bin/main.js"),
   });
 
   await vfs.init();
+
+  // Services that must run whether or not their app windows are open.
+  calendarService.init({ vfs, appManager });
+  clockService.init();
 
   const recentFilesService = new RecentFilesService(vfs);
   recentFilesService.init();
@@ -154,7 +217,10 @@ async function boot() {
 
   const desktopManager = new DesktopManager({
     container: desktop.getIconLayer(),
-    shortcuts: DESKTOP_SHORTCUTS,
+    shortcuts: DESKTOP_SHORTCUT_APPS.map(({ appId, type }) => {
+      const app = appManager.getApp(appId);
+      return { id: appId, appId, type, label: app.name, icon: app.icon ?? "\u25a2" };
+    }),
     appManager,
     vfs,
     recentFilesService,
@@ -181,13 +247,19 @@ async function boot() {
   keyboardShortcuts.bind("general.openExplorer", () => launchFromShortcut("file-explorer"));
   keyboardShortcuts.bind("general.openSettings", () => launchFromShortcut("settings"));
 
-  // Exposed for manual testing per the app framework and virtual
-  // file system steps' specs, and so future steps have something to
-  // call without re-plumbing the boot sequence.
+  // Core services exposed on window for inspection and scripting from
+  // the browser's developer console.
   window.appManager = appManager;
   window.vfs = vfs;
   window.settingsService = settingsService;
   window.keyboardShortcuts = keyboardShortcuts;
+  window.notificationService = notificationService;
+  window.fileAssociations = fileAssociations;
+  window.calendarService = calendarService;
+  window.clockService = clockService;
+
+  // First-run sample images, created in the background.
+  seedSamplePictures(vfs);
 
   await appManager.launch("about");
 }

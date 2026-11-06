@@ -60,8 +60,10 @@ class AppManager {
    * @param {string} descriptor.id - Unique app id.
    * @param {string} descriptor.name - Display name (used as a title/icon fallback).
    * @param {string} [descriptor.icon] - Fallback icon glyph.
+   * @param {string} [descriptor.description] - One-line description shown in Start Menu search results.
+   * @param {string} [descriptor.category] - Grouping such as "Productivity", "Utilities", or "System".
    * @param {boolean} [descriptor.singleInstance=false] - If true, launching an already-running instance focuses it instead of opening a second window.
-   * @param {boolean} [descriptor.dynamic=false] - True for on-demand, per-path app ids (e.g. `notes:<path>`, `file-explorer:<path>`) registered by vfsOpener. These represent "a file/folder window is open", not "the user picked an application" — StartMenuManager uses isDynamic() to keep such windows out of Recent Applications, since recent *files* are tracked separately by RecentFilesService.
+   * @param {boolean} [descriptor.dynamic=false] - True for on-demand, per-path app ids (`file-explorer:<path>`) registered by vfsOpener for folder windows. These represent "a folder window is open", not "the user picked an application" — StartMenuManager uses isDynamic() to keep such windows out of Recent Applications.
    * @param {() => Promise<{default: typeof import("./application.js").Application}>} descriptor.loader - Dynamic import of the app's module; only called on first launch.
    * @returns {void}
    */
@@ -77,6 +79,8 @@ class AppManager {
       id: descriptor.id,
       name: descriptor.name,
       icon: descriptor.icon ?? null,
+      description: descriptor.description ?? "",
+      category: descriptor.category ?? "Applications",
       singleInstance: descriptor.singleInstance ?? false,
       dynamic: descriptor.dynamic ?? false,
       loader: descriptor.loader,
@@ -215,11 +219,34 @@ class AppManager {
    * @returns {Array<{id: string, name: string, icon: string|null}>}
    */
   getRegisteredApps() {
-    return [...this._registry.values()].map((descriptor) => ({
+    return [...this._registry.values()].map((descriptor) => this._publicMetadata(descriptor));
+  }
+
+  /**
+   * @param {string} id
+   * @returns {{id: string, name: string, icon: string|null, description: string, category: string, singleInstance: boolean, dynamic: boolean}|null}
+   *   Public metadata for one registered app, or null. Shell components (Desktop shortcuts, Start Menu) read
+   *   names and icons from here rather than keeping their own copies.
+   */
+  getApp(id) {
+    const descriptor = this._registry.get(id);
+    return descriptor ? this._publicMetadata(descriptor) : null;
+  }
+
+  /**
+   * @param {object} descriptor
+   * @returns {object} Metadata without internals (loader, cached class).
+   */
+  _publicMetadata(descriptor) {
+    return {
       id: descriptor.id,
       name: descriptor.name,
       icon: descriptor.icon,
-    }));
+      description: descriptor.description,
+      category: descriptor.category,
+      singleInstance: descriptor.singleInstance,
+      dynamic: descriptor.dynamic,
+    };
   }
 
   /**

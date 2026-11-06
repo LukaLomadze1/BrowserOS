@@ -8,23 +8,18 @@
  * On first boot it seeds a default directory tree; every boot after
  * that finds the existing root and does nothing further.
  *
- * Step 9 fix (Bug #2 root cause): delete() moves an entry (and, if
- * it's a folder, its entire subtree) into /Trash by retargeting
- * paths via `_retargetDescendantPaths`. That helper used to run
- * silently — only the top-level deleted entry ever got a
- * filesystem:fileDeleted event, so anything reacting only to that
- * event (RecentFilesService's reactive listener) never found out
- * that a descendant file had individually vanished. `delete()` now
- * emits one filesystem:fileDeleted per retargeted descendant too, so
- * reactive listeners never have to fall back on next-render
- * reconciliation to notice a deleted file that lived inside a
- * deleted folder.
+ * Deletion: delete() moves an entry (and, if it's a folder, its
+ * entire subtree) into /Trash by retargeting paths via
+ * `_retargetDescendantPaths`, and emits one filesystem:fileDeleted
+ * for the entry and for every retargeted descendant, so listeners
+ * such as RecentFilesService learn about each file inside a deleted
+ * folder without having to reconcile on their next render.
  */
 
 import { eventBus } from "../eventBus.js";
 import { storageAdapter } from "./storageAdapter.js";
 import * as pathResolver from "./pathResolver.js";
-import { createId, createDirectoryEntry, createFileEntry, isFolder, isBinaryExtension } from "./entry.js";
+import { createId, createDirectoryEntry, createFileEntry, isFolder, isBinaryExtension, getMimeType } from "./entry.js";
 import * as validate from "./validationService.js";
 import { searchEntries } from "./searchService.js";
 import { VFSError } from "./vfsError.js";
@@ -213,9 +208,9 @@ class VirtualFileSystem {
 
   /**
    * @param {string} path
-   * @param {string} [content]
+   * @param {string|Blob} [content] - Text for text files; a Blob for binary types (png, jpg, jpeg, webp, gif).
    * @param {object} [options]
-   * @param {number} [options.size] - Required for metadata-only types (png/jpg) since there's no content to measure.
+   * @param {number} [options.size] - Only for metadata-only binary entries (no content to measure).
    * @param {boolean} [options.hidden]
    * @param {boolean} [options.readOnly]
    * @param {boolean} [options.favorite]
@@ -228,6 +223,10 @@ class VirtualFileSystem {
     const resolved = pathResolver.resolvePath(path, currentDir);
     const name = pathResolver.getBaseName(resolved);
     validate.validateName(name);
+    const binary = isBinaryExtension(pathResolver.getExtension(name));
+    if (content instanceof Blob && !binary) {
+      throw new VFSError("INVALID_CONTENT", `"${name}" is a text file; pass its content as a string`);
+    }
 
     const parent = await this._getEntryOrThrow(pathResolver.getParentPath(resolved));
     validate.assertIsFolder(parent);
@@ -254,8 +253,8 @@ class VirtualFileSystem {
 
   /**
    * Overwrites an existing file's content. Use createFile() first if
-   * the file doesn't exist yet — the two are kept separate
-   * operations deliberately, matching the spec's operation list.
+   * the file doesn't exist yet — the two are deliberately separate
+   * operations, so a write can never create a file by accident.
    * @param {string} path
    * @param {string} content
    * @param {string} [currentDir]
@@ -271,6 +270,55 @@ class VirtualFileSystem {
 
     entry.content = content;
     entry.size = new TextEncoder().encode(content).length;
+    entry.modifiedAt = Date.now();
+    await storageAdapter.put(entry);
+
+    eventBus.emit("filesystem:fileModified", { entry: { ...entry } });
+    return { ...entry };
+  }
+
+  /**
+   * Read a file's content as a Blob. Binary files return their stored
+   * data; text files return their text wrapped in a Blob of the
+   * matching MIME type (e.g. an SVG for an image element).
+   * @param {string} path
+   * @param {string} [currentDir]
+   * @returns {Promise<Blob>}
+   * @throws {VFSError} NOT_FOUND, NOT_A_FILE, NO_CONTENT
+   */
+  async readBinary(path, currentDir = "/") {
+    await this.init();
+    const entry = await this._getEntryOrThrow(path, currentDir);
+    validate.assertIsFile(entry);
+    const type = getMimeType(entry.extension);
+    if (entry.content instanceof Blob) {
+      // Re-type rather than trust whatever type the stored Blob carries.
+      return entry.content.type === type ? entry.content : new Blob([entry.content], { type });
+    }
+    if (typeof entry.content === "string") return new Blob([entry.content], { type });
+    throw new VFSError("NO_CONTENT", `"${entry.path}" has no stored data (it was created as metadata only)`);
+  }
+
+  /**
+   * Replace a binary file's content.
+   * @param {string} path
+   * @param {Blob} blob
+   * @param {string} [currentDir]
+   * @returns {Promise<object>} The updated file entry.
+   * @throws {VFSError} NOT_FOUND, NOT_A_FILE, READ_ONLY, INVALID_CONTENT
+   */
+  async writeBinary(path, blob, currentDir = "/") {
+    await this.init();
+    const entry = await this._getEntryOrThrow(path, currentDir);
+    validate.assertIsFile(entry);
+    validate.assertNotReadOnly(entry);
+    if (!(blob instanceof Blob)) throw new VFSError("INVALID_CONTENT", "writeBinary() requires a Blob");
+    if (!isBinaryExtension(entry.extension)) {
+      throw new VFSError("INVALID_CONTENT", `"${entry.path}" is a text file; use write() instead`);
+    }
+
+    entry.content = blob;
+    entry.size = blob.size;
     entry.modifiedAt = Date.now();
     await storageAdapter.put(entry);
 
@@ -531,7 +579,7 @@ class VirtualFileSystem {
     if (isBinaryExtension(entry.extension)) {
       throw new VFSError(
         "BINARY_CONTENT",
-        `"${entry.path}" is a .${entry.extension} file; only metadata is supported, not content`
+        `"${entry.path}" is a binary .${entry.extension} file; read it with readBinary()`
       );
     }
   }

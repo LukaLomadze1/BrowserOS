@@ -10,10 +10,9 @@
  *
  * Recent applications and recent files are deliberately two separate
  * lists, backed by two separate mechanisms: app launches are cheap
- * to track directly off "app:launched", but a *file*-backed window
- * (opened via a dynamically-registered `notes:<path>` app id) is not
- * "an application the user picked" — RecentFilesService is what
- * tracks those, and it's the only one that reconciles against the
+ * to track directly off "app:launched", but opening a *file* is not
+ * "an application the user picked" — RecentFilesService (fed by
+ * vfsOpener) is what tracks files, and it's the only one that reconciles against the
  * VFS, which is what keeps deleted files out of this list. Recent
  * files are reconciled every time the menu opens, before the list is
  * re-rendered, and again before any recent file is opened.
@@ -349,7 +348,7 @@ class StartMenuManager {
         key: `app:${app.id}`,
         name: app.name,
         icon: app.icon,
-        detail: "Application",
+        detail: app.description || "Application",
         score: value,
         activate: () => this._launch(app.id),
       }));
