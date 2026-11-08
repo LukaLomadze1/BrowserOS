@@ -251,14 +251,14 @@
 }
 
 .calculator__key--equals {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   border: none;
   color: var(--color-text-on-accent);
   font-weight: 600;
 }
 
 .calculator__key--equals:hover {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary-strong);
   filter: brightness(1.08);
 }
 

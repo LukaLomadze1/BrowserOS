@@ -1,0 +1,7 @@
+# Production copy made by tools/build.py
+dist/
+
+# Test output (screenshots, downloaded backups)
+tests/e2e/output/
+__pycache__/
+*.pyc

@@ -1,0 +1,115 @@
+/**
+ * Full-window system notices (src/components/system-screen/): storage
+ * failures, another tab holding the session, nested copies. Above
+ * every other layer, dialogs included.
+ */
+
+.system-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--color-bg-void) 88%, transparent);
+  backdrop-filter: blur(8px);
+  user-select: text;
+}
+
+.system-screen__card {
+  width: min(460px, 100%);
+  padding: 28px 28px 24px;
+  border-radius: var(--radius-lg, 14px);
+  border: 1px solid var(--color-surface-glass-border-strong);
+  background: var(--color-window-bg-solid);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.system-screen__icon {
+  display: inline-flex;
+  font-size: 40px;
+  line-height: 1;
+  color: var(--color-accent-primary);
+  margin-bottom: 16px;
+}
+
+/* The BrowserOS mark: text-colored frame, accent orb (controls.css). */
+.system-screen__icon.brand-mark {
+  color: var(--color-text-primary);
+}
+
+.system-screen__title {
+  margin: 0 0 10px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.system-screen__message,
+.system-screen__detail,
+.system-screen__status {
+  margin: 0 0 12px;
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+.system-screen__message {
+  color: var(--color-text-secondary);
+}
+
+.system-screen__detail {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.system-screen__status {
+  color: var(--color-text-primary);
+}
+
+.system-screen__detail[hidden],
+.system-screen__status[hidden],
+.system-screen__actions[hidden] {
+  display: none;
+}
+
+.system-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.system-screen__button {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-surface-glass-border-strong);
+  background: var(--color-surface-glass);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.system-screen__button:hover {
+  background: var(--color-surface-glass-strong);
+}
+
+.system-screen__button--primary {
+  border-color: transparent;
+  background: var(--color-accent-primary);
+  color: var(--color-text-on-accent);
+  font-weight: 600;
+}
+
+.system-screen__button:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 2px;
+}

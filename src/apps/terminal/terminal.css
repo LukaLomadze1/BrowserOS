@@ -7,6 +7,10 @@
  * it follows the active theme.
  */
 
+.window__body:has(> .terminal-app) {
+  padding: 0;
+}
+
 .terminal-app {
   display: flex;
   flex-direction: column;
@@ -17,9 +21,8 @@
 .terminal__viewport {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: var(--color-terminal-bg);
-  border-radius: var(--radius-md);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   line-height: 1.6;

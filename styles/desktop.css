@@ -141,11 +141,13 @@
   transform: scale(0.97);
 }
 
+/* The BrowserOS mark (see .brand-mark in controls.css): the frame
+ * follows the text color, the orb the accent. */
 .start-button__glyph {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  background: var(--color-accent-gradient);
+  display: inline-flex;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--color-text-primary);
   flex-shrink: 0;
 }
 
@@ -183,4 +185,10 @@
 .taskbar-window-button:focus-visible {
   outline: 2px solid var(--color-accent-primary);
   outline-offset: 1px;
+}
+
+/* An application's code is loading for its first launch (see Desktop). */
+body[data-app-loading],
+body[data-app-loading] * {
+  cursor: progress !important;
 }

@@ -1,0 +1,38 @@
+# Publishes BrowserOS to GitHub Pages. Runs only when started by hand
+# (Actions > Deploy to GitHub Pages > Run workflow), after Pages has been
+# set to deploy from GitHub Actions in the repository settings.
+# See docs/INSTALLATION.md.
+name: Deploy to GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Project sites are served from /<repository>/; the build adjusts 404.html for that path.
+      - name: Build
+        run: python tools/build.py --base-path "/${{ github.event.repository.name }}/"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

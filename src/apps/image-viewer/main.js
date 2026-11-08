@@ -77,7 +77,7 @@ export default class ImageViewerApp extends Application {
     return {
       element: this._root,
       title: "Image Viewer",
-      icon: "\u25a7",
+      icon: "icon:image",
       width: 820,
       height: 600,
       minWidth: 360,

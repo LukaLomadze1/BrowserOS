@@ -36,6 +36,8 @@ export class Desktop {
     this._appManager = null;
     this._contextMenu = new ContextMenu();
     this._cleanups = [];
+    /** Applications whose code is being fetched (first launch). */
+    this._loadingApps = 0;
   }
 
   /**
@@ -68,6 +70,7 @@ export class Desktop {
 
     this._root.append(desktopEl);
     this._wireTaskbarWindowList();
+    this._wireLoadingCursor();
 
     eventBus.emit("desktop:ready", {});
   }
@@ -131,6 +134,23 @@ export class Desktop {
     this._contextMenu.hide();
   }
 
+  /**
+   * While an application's code loads on its first launch, the pointer
+   * shows progress (body[data-app-loading], styled in desktop.css).
+   * @returns {void}
+   */
+  _wireLoadingCursor() {
+    const update = (delta) => {
+      this._loadingApps = Math.max(0, this._loadingApps + delta);
+      if (this._loadingApps > 0) document.body.dataset.appLoading = "true";
+      else delete document.body.dataset.appLoading;
+    };
+    this._cleanups.push(
+      eventBus.on("app:loading", () => update(1)),
+      eventBus.on("app:loaded", () => update(-1))
+    );
+  }
+
   // ---------------------------------------------------------------
   // Taskbar
   // ---------------------------------------------------------------
@@ -143,7 +163,7 @@ export class Desktop {
       className: "start-button",
       attrs: { type: "button", "aria-label": "Start", "aria-haspopup": "true", "aria-expanded": "false" },
       children: [
-        createElement("span", { className: "start-button__glyph", attrs: { "aria-hidden": "true" } }),
+        createIconElement("icon:browseros", { className: "start-button__glyph brand-mark" }),
         createElement("span", { className: "start-button__label", text: "Start" }),
       ],
       on: {

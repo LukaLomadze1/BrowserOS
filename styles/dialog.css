@@ -102,7 +102,7 @@
 }
 
 .dialog__button--primary {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   color: var(--color-text-on-accent);
 }
 

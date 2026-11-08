@@ -9,7 +9,7 @@
  * Apps MAY talk to AppManager directly — "Application → AppManager →
  * WindowManager" was always meant as an allowed chain, not a ban on
  * the first arrow. `this.appManager` exists so an app can open
- * another app (e.g. the Folder Viewer opening a file it contains)
+ * another app (e.g. File Explorer opening a file it contains)
  * without ever reaching for WindowManager itself.
  */
 
@@ -23,7 +23,7 @@ export class Application {
     this.meta = meta;
     /** @type {import("./appManager.js").AppManager|null} Set by AppManager; lets an app launch other apps without ever touching WindowManager. */
     this.appManager = meta.appManager ?? null;
-    /** @type {import("./recentFilesService.js").RecentFilesService|null} Set by AppManager; lets an app record/query recent files (e.g. a Folder Viewer opening one of its children). */
+    /** @type {import("./recentFilesService.js").RecentFilesService|null} Set by AppManager; lets an app record/query recent files (e.g. File Explorer opening one of its children). */
     this.recentFilesService = meta.recentFilesService ?? null;
     /** @type {string|null} Set by AppManager once the window exists. */
     this.windowId = null;
@@ -48,8 +48,9 @@ export class Application {
    *   resizable?: boolean,
    *   minimizable?: boolean,
    *   maximizable?: boolean,
-   *   closable?: boolean
-   * }}
+   *   closable?: boolean,
+   *   center?: boolean
+   * }} `center` opens the window in the middle of the desktop instead of cascading it.
    */
   launch(options) {
     throw new Error(`Application "${this.id}" must implement launch()`);
@@ -65,6 +66,16 @@ export class Application {
    * @returns {void}
    */
   onRelaunch(options) {}
+
+  /**
+   * Optional: asked before the window closes normally (close button,
+   * keyboard shortcut, taskbar). Return false (or a promise of false)
+   * to keep the window open — for example after the user cancels a
+   * "save changes?" prompt. Ending the application from Task Manager
+   * does not ask; it reads getCloseWarning() instead. Subclasses that
+   * need it define `onBeforeClose()`; the base class doesn't, so
+   * windows without it close immediately.
+   */
 
   /**
    * Called once by AppManager right before the window is torn down.

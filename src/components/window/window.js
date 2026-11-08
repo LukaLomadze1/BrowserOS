@@ -14,7 +14,7 @@
  */
 
 import { createElement } from "../../utils/dom.js";
-import { renderIcon } from "../../utils/icons.js";
+import { createIconElement, renderIcon } from "../../utils/icons.js";
 import { getMotionDuration } from "../../utils/motion.js";
 
 /** Extra time allowed past the exit transition before the window is removed regardless. */
@@ -148,7 +148,7 @@ export class WindowView {
     this._el.style.height = "100%";
     if (this._maximizeButton) {
       this._maximizeButton.setAttribute("aria-label", `Restore ${this._config.title}`);
-      this._maximizeButton.textContent = "\u2750";
+      renderIcon(this._maximizeButton, "icon:window-restore");
     }
   }
 
@@ -165,7 +165,7 @@ export class WindowView {
     this._applyRect(rect);
     if (this._maximizeButton) {
       this._maximizeButton.setAttribute("aria-label", `Maximize ${this._config.title}`);
-      this._maximizeButton.textContent = "\u25a1";
+      renderIcon(this._maximizeButton, "icon:window-maximize");
     }
   }
 
@@ -238,7 +238,7 @@ export class WindowView {
         createElement("button", {
           className: "window__control window__control--minimize",
           attrs: { type: "button", "aria-label": `Minimize ${title}` },
-          text: "\u2013",
+          children: [createIconElement("icon:window-minimize")],
           on: { click: (e) => { e.stopPropagation(); this._callbacks.onRequestMinimize(this.id); } },
         })
       );
@@ -247,7 +247,7 @@ export class WindowView {
       this._maximizeButton = createElement("button", {
         className: "window__control window__control--maximize",
         attrs: { type: "button", "aria-label": `Maximize ${title}` },
-        text: "\u25a1",
+        children: [createIconElement("icon:window-maximize")],
         on: { click: (e) => { e.stopPropagation(); this._callbacks.onRequestMaximizeToggle(this.id); } },
       });
       controls.push(this._maximizeButton);
@@ -257,7 +257,7 @@ export class WindowView {
         createElement("button", {
           className: "window__control window__control--close",
           attrs: { type: "button", "aria-label": `Close ${title}` },
-          text: "\u2715",
+          children: [createIconElement("icon:close")],
           on: { click: (e) => { e.stopPropagation(); this._callbacks.onRequestClose(this.id); } },
         })
       );

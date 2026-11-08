@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <title>BrowserOS</title>
+  <g fill="none" stroke="#eef1f7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M39 22.2V16a8 8 0 0 0-8-8H13a8 8 0 0 0-8 8v14a8 8 0 0 0 8 8h10.2"/>
+    <path d="M5 17h34" stroke-linecap="butt"/>
+    <circle cx="37" cy="36" r="8.5" fill="#7c6cf6" stroke="none"/>
+  </g>
+</svg>

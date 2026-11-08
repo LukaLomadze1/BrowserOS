@@ -263,12 +263,12 @@
 
 .clock-app__button--primary {
   border-color: transparent;
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   color: var(--color-text-on-accent);
 }
 
 .clock-app__button--primary:hover:not(:disabled) {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary-strong);
   filter: brightness(1.08);
 }
 
@@ -496,6 +496,6 @@
 .clock-app__progress-fill {
   width: 100%;
   height: 100%;
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   transform-origin: left center;
 }

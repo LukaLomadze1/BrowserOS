@@ -1,0 +1,129 @@
+/**
+ * Start-up screen (markup in index.html, driven by
+ * src/core/system/bootScreen.js).
+ *
+ * It paints with the first frame, before any script has run, so it
+ * uses only theme tokens (the render-blocking theme preboot has already
+ * picked light or dark). The mark is monochrome on purpose: the stored
+ * accent is applied later in start-up, and a mark that changed color
+ * mid-animation would look like a glitch.
+ */
+
+.boot-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  background:
+    radial-gradient(circle at 50% 38%, var(--color-surface-glass-strong), transparent 55%),
+    linear-gradient(160deg, var(--color-bg-void-gradient-b) 0%, var(--color-bg-void-gradient-a) 70%);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  transition: opacity 320ms var(--ease-standard), visibility 0s linear 320ms;
+}
+
+.boot-screen__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  animation: boot-screen-enter 520ms var(--ease-standard) both;
+}
+
+.boot-screen__mark {
+  width: 72px;
+  height: 72px;
+  color: var(--color-text-primary);
+}
+
+.boot-screen__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.boot-screen__progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 220px;
+  animation: boot-screen-enter 520ms var(--ease-standard) 80ms both;
+}
+
+.boot-screen__track {
+  position: relative;
+  width: 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--radius-round);
+  background: var(--color-surface-glass-strong);
+}
+
+.boot-screen__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 100%;
+  border-radius: inherit;
+  background: var(--color-text-primary);
+  transform-origin: left center;
+  transform: scaleX(var(--boot-progress, 0));
+  transition: transform 240ms var(--ease-standard);
+}
+
+.boot-screen__status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+/* Added by src/core/system/bootFallback.js when the code can't be loaded. */
+.boot-screen__reload {
+  margin-top: var(--space-2);
+}
+
+/* Fading out: the desktop underneath is already usable. */
+.boot-screen--leaving {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@keyframes boot-screen-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Reduced motion (system preference before start-up, or the BrowserOS
+ * setting once it is applied): no entrance animation, no fade. */
+@media (prefers-reduced-motion: reduce) {
+  .boot-screen,
+  .boot-screen__brand,
+  .boot-screen__progress,
+  .boot-screen__bar {
+    animation: none;
+    transition: none;
+  }
+}
+
+:root[data-reduced-motion="on"] .boot-screen,
+:root[data-reduced-motion="on"] .boot-screen__brand,
+:root[data-reduced-motion="on"] .boot-screen__progress,
+:root[data-reduced-motion="on"] .boot-screen__bar {
+  animation: none;
+  transition: none;
+}

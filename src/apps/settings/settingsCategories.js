@@ -33,6 +33,7 @@ import KeyboardPage from "./pages/keyboardPage.js";
 import NotificationsPage from "./pages/notificationsPage.js";
 import TaskbarPage from "./pages/taskbarPage.js";
 import BrowserPage from "./pages/browserPage.js";
+import CodeStudioPage from "./pages/codeStudioPage.js";
 import SystemPage from "./pages/systemPage.js";
 
 /**
@@ -57,16 +58,17 @@ import SystemPage from "./pages/systemPage.js";
 
 /** @type {ReadonlyArray<SettingsCategory>} */
 export const SETTINGS_CATEGORIES = Object.freeze([
-  { id: "appearance", label: "Appearance", icon: "\u25d0", createPage: () => new AppearancePage() },
-  { id: "wallpaper", label: "Wallpaper", icon: "\u25a7", createPage: (context) => new WallpaperPage(context) },
-  { id: "desktop", label: "Desktop", icon: "\u25a6", createPage: (context) => new DesktopPage(context) },
-  { id: "startMenu", label: "Start Menu", icon: "\u2630", createPage: (context) => new StartMenuPage(context) },
-  { id: "fileExplorer", label: "File Explorer", icon: "\u25a4", createPage: (context) => new FileExplorerPage(context) },
+  { id: "appearance", label: "Appearance", icon: "icon:contrast", createPage: () => new AppearancePage() },
+  { id: "wallpaper", label: "Wallpaper", icon: "icon:image", createPage: (context) => new WallpaperPage(context) },
+  { id: "desktop", label: "Desktop", icon: "icon:apps", createPage: (context) => new DesktopPage(context) },
+  { id: "startMenu", label: "Start Menu", icon: "icon:browseros", createPage: (context) => new StartMenuPage(context) },
+  { id: "fileExplorer", label: "File Explorer", icon: "icon:folder", createPage: (context) => new FileExplorerPage(context) },
   { id: "notifications", label: "Notifications", icon: "icon:bell", createPage: (context) => new NotificationsPage(context) },
   { id: "taskbar", label: "Taskbar", icon: "icon:display", createPage: (context) => new TaskbarPage(context) },
   { id: "browser", label: "Browser", icon: "icon:globe", createPage: (context) => new BrowserPage(context) },
-  { id: "keyboard", label: "Keyboard Shortcuts", icon: "\u2328", createPage: (context) => new KeyboardPage(context) },
-  { id: "system", label: "System", icon: "\u24d8", createPage: () => new SystemPage() },
+  { id: "codeStudio", label: "Code Studio", icon: "icon:code", createPage: (context) => new CodeStudioPage(context) },
+  { id: "keyboard", label: "Keyboard Shortcuts", icon: "icon:keyboard", createPage: (context) => new KeyboardPage(context) },
+  { id: "system", label: "System", icon: "icon:info", createPage: (context) => new SystemPage(context) },
 ]);
 
 /** Category shown when Settings opens without a (valid) deep link. */

@@ -1,59 +1,37 @@
 /**
- * @file Sample pictures for a new BrowserOS installation.
- *
- * On first run, /Pictures/Sample Pictures is filled with a few images
- * generated locally (PNG via canvas, plus one SVG), so Image Viewer and
- * the image file associations have something to show without any
- * download. A stored flag ensures this happens once: deleting the
- * samples is permanent. Everything goes through the public VFS API.
+ * @file Sample pictures: three PNG images drawn locally on a canvas
+ * and one SVG, so Image Viewer and the image file associations have
+ * something to show without any download.
  */
 
-import { storage } from "../storage.js";
-
-const SEEDED_FLAG = "content:samplePicturesSeeded";
 const FOLDER = "/Pictures/Sample Pictures";
 
-const PNG_SAMPLES = [
+const PNG_SAMPLES = Object.freeze([
   { name: "Aurora.png", colors: ["#1b1f3b", "#7c6cf6", "#34e2c6"], shape: "waves" },
   { name: "Horizon.png", colors: ["#2b1a2f", "#f59e42", "#f2607e"], shape: "sun" },
   { name: "Lagoon.png", colors: ["#062a3a", "#22c7e0", "#a3e635"], shape: "circles" },
-];
+]);
 
 const SVG_SAMPLE = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7c6cf6"/>
-      <stop offset="1" stop-color="#34e2c6"/>
-    </linearGradient>
-  </defs>
-  <rect width="640" height="420" rx="36" fill="#0f1220"/>
-  <circle cx="320" cy="190" r="110" fill="url(#g)"/>
-  <path d="M250 190l50 50 90-100" fill="none" stroke="#0f1220" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="320" y="370" fill="#eef1f7" font-family="sans-serif" font-size="34" text-anchor="middle">BrowserOS</text>
+  <rect width="640" height="420" rx="36" fill="#141826"/>
+  <g transform="translate(224 70) scale(4)" fill="none" stroke="#eef1f7" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M39 22.2V16a8 8 0 0 0-8-8H13a8 8 0 0 0-8 8v14a8 8 0 0 0 8 8h10.2"/>
+    <path d="M5 17h34" stroke-linecap="butt"/>
+    <circle cx="37" cy="36" r="8.5" fill="#7c6cf6" stroke="none"/>
+  </g>
+  <text x="320" y="372" fill="#eef1f7" font-family="sans-serif" font-size="34" font-weight="600" text-anchor="middle">BrowserOS</text>
 </svg>
 `;
 
 /**
- * Create the sample pictures if they have never been created.
- * @param {import("./virtualFileSystem.js").vfs} vfs
- * @returns {Promise<void>}
+ * @returns {Array<{path: string, render: () => Promise<Blob|string|null>}>}
+ *   The sample pictures, each drawn only when it is about to be written.
  */
-export async function seedSamplePictures(vfs) {
-  if (storage.get(SEEDED_FLAG, false)) return;
-  try {
-    if (!(await vfs.exists("/Pictures"))) await vfs.createFolder("/Pictures");
-    if (!(await vfs.exists(FOLDER))) await vfs.createFolder(FOLDER);
-    for (const sample of PNG_SAMPLES) {
-      const path = `${FOLDER}/${sample.name}`;
-      if (await vfs.exists(path)) continue;
-      const blob = await renderSample(sample);
-      if (blob) await vfs.createFile(path, blob);
-    }
-    if (!(await vfs.exists(`${FOLDER}/BrowserOS.svg`))) await vfs.createFile(`${FOLDER}/BrowserOS.svg`, SVG_SAMPLE);
-    storage.set(SEEDED_FLAG, true);
-  } catch (error) {
-    console.warn("[sampleContent] sample pictures could not be created:", error);
-  }
+export function getSamplePictures() {
+  return [
+    ...PNG_SAMPLES.map((sample) => ({ path: `${FOLDER}/${sample.name}`, render: () => renderSample(sample) })),
+    { path: `${FOLDER}/BrowserOS.svg`, render: async () => SVG_SAMPLE },
+  ];
 }
 
 /**

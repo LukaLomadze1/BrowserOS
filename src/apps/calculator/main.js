@@ -138,7 +138,7 @@ export default class CalculatorApp extends Application {
     return {
       element: this._root,
       title: "Calculator",
-      icon: "\u25a6",
+      icon: "icon:calculator",
       width: 440,
       height: 580,
       minWidth: 300,

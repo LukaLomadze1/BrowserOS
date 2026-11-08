@@ -60,7 +60,7 @@
   /* ---- Text ---- */
   --color-text-primary: #eef1f7;
   --color-text-secondary: #97a0b3;
-  --color-text-tertiary: #5b6478;
+  --color-text-tertiary: #7d869a; /* 4.8:1 on window surfaces (WCAG AA) */
 
   /* ---- Semantic ---- */
   --color-danger: #f2495c;
@@ -154,7 +154,6 @@
   --start-menu-max-height: 560px;
 
   /* ---- Derived accent tokens (theme-independent formulas) ---- */
-  --color-accent-gradient: linear-gradient(135deg, var(--color-accent-primary) 0%, var(--color-accent-secondary) 100%);
   --color-accent-soft: color-mix(in srgb, var(--color-accent-primary) 16%, transparent);
   --color-accent-ring-soft: color-mix(in srgb, var(--color-accent-primary) 35%, transparent);
   --icon-selection-color: color-mix(in srgb, var(--color-accent-primary) 28%, transparent);
@@ -199,7 +198,7 @@
 
   --color-text-primary: #151a26;
   --color-text-secondary: #4a5366;
-  --color-text-tertiary: #6b7488;
+  --color-text-tertiary: #5d6679; /* 4.8:1 on the light desktop background (WCAG AA) */
 
   --color-danger: #d42a42;
   --color-success: #0b8a5f;

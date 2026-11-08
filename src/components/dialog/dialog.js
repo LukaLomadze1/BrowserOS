@@ -10,6 +10,12 @@
  * inherently one-at-a-time in practice, so there's no shared state to
  * get wrong by not making this a singleton like ContextMenu.
  *
+ * Modal behavior: while any dialog is open the desktop behind it
+ * (#app-root) is inert — unreachable by mouse, keyboard, and assistive
+ * technology — and only the topmost dialog responds to Escape, Tab,
+ * and Enter. Tab and Shift+Tab cycle through the dialog's controls;
+ * closing returns focus to whatever had it before.
+ *
  * Form dialogs (event editor, rename/prompt) use three optional hooks:
  * `onBeforeClose` can veto a button (e.g. invalid input keeps the
  * dialog open while it shows an error), `submitValue` makes Enter in a
@@ -22,6 +28,28 @@ import { getMotionDuration } from "../../utils/motion.js";
 
 /** Extra time allowed past the exit transition (--duration-normal) before the backdrop is removed. */
 const CLOSE_ANIMATION_GRACE_MS = 40;
+const FOCUSABLE = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])";
+
+/** @type {Dialog[]} Open dialogs, topmost last. */
+const openDialogs = [];
+
+/**
+ * Make the desktop inert while any dialog is open.
+ * @returns {void}
+ */
+function syncBackgroundInert() {
+  const appRoot = document.getElementById("app-root");
+  if (!appRoot) return;
+  if (openDialogs.length > 0) {
+    if (!appRoot.hasAttribute("data-dialog-inert")) {
+      appRoot.setAttribute("data-dialog-inert", appRoot.inert ? "kept" : "set");
+      appRoot.inert = true;
+    }
+  } else if (appRoot.hasAttribute("data-dialog-inert")) {
+    if (appRoot.getAttribute("data-dialog-inert") === "set" && !document.querySelector(".system-screen")) appRoot.inert = false;
+    appRoot.removeAttribute("data-dialog-inert");
+  }
+}
 
 class Dialog {
   /**
@@ -61,14 +89,17 @@ class Dialog {
     this._settled = true;
 
     document.removeEventListener("keydown", this._keydownHandler, true);
+    const index = openDialogs.indexOf(this);
+    if (index !== -1) openDialogs.splice(index, 1);
+    syncBackgroundInert();
     this._dialogEl.classList.remove("dialog--visible");
     this._backdropEl.classList.remove("dialog-backdrop--visible");
 
     const backdrop = this._backdropEl;
     window.setTimeout(() => backdrop.remove(), getMotionDuration("normal") + CLOSE_ANIMATION_GRACE_MS);
 
-    if (this._previousActiveElement && typeof this._previousActiveElement.focus === "function") {
-      this._previousActiveElement.focus();
+    if (this._previousActiveElement?.isConnected && typeof this._previousActiveElement.focus === "function") {
+      this._previousActiveElement.focus({ preventScroll: true });
     }
 
     this._config.onClose(result);
@@ -159,6 +190,8 @@ class Dialog {
       (this._config.initialFocus ?? this._autofocusTarget ?? this._dialogEl).focus();
     });
     document.addEventListener("keydown", this._keydownHandler, true);
+    openDialogs.push(this);
+    syncBackgroundInert();
   }
 
   /**
@@ -166,6 +199,8 @@ class Dialog {
    * @returns {void}
    */
   _onKeyDown(e) {
+    // Only the topmost dialog answers keys.
+    if (openDialogs[openDialogs.length - 1] !== this) return;
     if (e.key === "Escape") {
       e.preventDefault();
       this.close(null);
@@ -192,20 +227,25 @@ class Dialog {
    * @returns {void}
    */
   _trapTabFocus(e) {
-    const focusable = [
-      ...this._dialogEl.querySelectorAll(
-        "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
-      ),
-    ].filter((el) => el.offsetParent !== null);
-    if (focusable.length === 0) return;
+    const focusable = [...this._dialogEl.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+    if (focusable.length === 0) {
+      e.preventDefault();
+      this._dialogEl.focus();
+      return;
+    }
 
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
+    const current = focusable.indexOf(document.activeElement);
 
-    if (e.shiftKey && document.activeElement === first) {
+    if (current === -1) {
+      // Focus is on the dialog itself (or somewhere it shouldn't be): enter the cycle.
+      e.preventDefault();
+      (e.shiftKey ? last : first).focus();
+    } else if (e.shiftKey && current === 0) {
       e.preventDefault();
       last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
+    } else if (!e.shiftKey && current === focusable.length - 1) {
       e.preventDefault();
       first.focus();
     }

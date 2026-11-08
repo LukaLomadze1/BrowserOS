@@ -55,6 +55,7 @@ export const SHORTCUT_CATEGORIES = Object.freeze([
   Object.freeze({ id: "clock", label: "Clock" }),
   Object.freeze({ id: "imageViewer", label: "Image Viewer" }),
   Object.freeze({ id: "browser", label: "Browser" }),
+  Object.freeze({ id: "codeStudio", label: "Code Studio" }),
 ]);
 
 const DESKTOP_CONTEXT = "Desktop icons focused";
@@ -67,6 +68,8 @@ const CALCULATOR_CONTEXT = "Calculator window";
 const CALENDAR_CONTEXT = "Calendar window";
 const VIEWER_CONTEXT = "Image Viewer window";
 const BROWSER_CONTEXT = "Browser window (not inside a web page)";
+const CODE_CONTEXT = "Code Studio window";
+const CODE_EDITOR_CONTEXT = "Code Studio editor";
 
 /**
  * @typedef {object} KeyCombo
@@ -362,6 +365,34 @@ export const SHORTCUT_DEFINITIONS = deepFreeze([
   { id: "browser.downloads", category: "browser", description: "Downloads", context: BROWSER_CONTEXT, combos: [{ key: "j", mod: true }], scope: "local", allowInEditable: true },
   { id: "browser.stop", category: "browser", description: "Stop loading", context: "Browser window, while a page loads", combos: [{ key: "Escape" }], scope: "local" },
   { id: "imageViewer.fullscreen", category: "imageViewer", description: "Toggle fullscreen", context: VIEWER_CONTEXT, combos: [{ key: "f" }], scope: "local" },
+  { id: "codeStudio.save", category: "codeStudio", description: "Save the file", context: CODE_CONTEXT, combos: [{ key: "s", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.saveAs", category: "codeStudio", description: "Save the file under another name", context: CODE_CONTEXT, combos: [{ key: "s", mod: true, shift: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.saveAll", category: "codeStudio", description: "Save all files", context: CODE_CONTEXT, combos: [{ key: "s", mod: true, alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.newFile", category: "codeStudio", description: "New file in the project", context: CODE_CONTEXT, combos: [{ key: "n", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.quickOpen", category: "codeStudio", description: "Go to a file by name", context: CODE_CONTEXT, combos: [{ key: "p", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.find", category: "codeStudio", description: "Find in the file", context: CODE_CONTEXT, combos: [{ key: "f", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.replace", category: "codeStudio", description: "Replace in the file", context: CODE_CONTEXT, combos: [{ key: "h", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.findInProject", category: "codeStudio", description: "Search and replace across the project", context: CODE_CONTEXT, combos: [{ key: "f", mod: true, shift: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.findNext", category: "codeStudio", description: "Next match", context: "Code Studio find bar", combos: [{ key: "Enter" }, { key: "F3" }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.findPrevious", category: "codeStudio", description: "Previous match", context: "Code Studio find bar", combos: [{ key: "Enter", shift: true }, { key: "F3", shift: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.goToLine", category: "codeStudio", description: "Go to line", context: CODE_CONTEXT, combos: [{ key: "g", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.closeTab", category: "codeStudio", description: "Close the file", context: CODE_CONTEXT, combos: [{ key: "w", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.nextTab", category: "codeStudio", description: "Next open file", context: CODE_CONTEXT, combos: [{ key: "PageDown", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.previousTab", category: "codeStudio", description: "Previous open file", context: CODE_CONTEXT, combos: [{ key: "PageUp", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.run", category: "codeStudio", description: "Run: show the page in the preview", context: CODE_CONTEXT, combos: [{ key: "Enter", mod: true }, { key: "F5" }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.togglePreview", category: "codeStudio", description: "Show or hide the preview", context: CODE_CONTEXT, combos: [{ key: "p", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.toggleSidebar", category: "codeStudio", description: "Show or hide the sidebar", context: CODE_CONTEXT, combos: [{ key: "b", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.togglePanel", category: "codeStudio", description: "Show or hide the bottom panel", context: CODE_CONTEXT, combos: [{ key: "j", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.toggleTerminal", category: "codeStudio", description: "Show the terminal", context: CODE_CONTEXT, combos: [{ code: "Backquote", ctrl: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.wordWrap", category: "codeStudio", description: "Toggle word wrap", context: CODE_CONTEXT, combos: [{ key: "z", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.undo", category: "codeStudio", description: "Undo", context: CODE_EDITOR_CONTEXT, combos: [{ key: "z", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.redo", category: "codeStudio", description: "Redo", context: CODE_EDITOR_CONTEXT, combos: [{ key: "y", mod: true }, { key: "z", mod: true, shift: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.toggleComment", category: "codeStudio", description: "Comment or uncomment the selected lines", context: CODE_EDITOR_CONTEXT, combos: [{ key: "/", mod: true }, { code: "Slash", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.indent", category: "codeStudio", description: "Indent the selected lines", context: CODE_EDITOR_CONTEXT, combos: [{ key: "]", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.outdent", category: "codeStudio", description: "Outdent the selected lines (Shift + Tab also works)", context: CODE_EDITOR_CONTEXT, combos: [{ key: "[", mod: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.moveLineUp", category: "codeStudio", description: "Move the selected lines up", context: CODE_EDITOR_CONTEXT, combos: [{ key: "ArrowUp", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.moveLineDown", category: "codeStudio", description: "Move the selected lines down", context: CODE_EDITOR_CONTEXT, combos: [{ key: "ArrowDown", alt: true }], scope: "local", allowInEditable: true },
+  { id: "codeStudio.leaveEditor", category: "codeStudio", description: "Escape, then Tab: move focus out of the editor instead of indenting", context: CODE_EDITOR_CONTEXT, combos: [{ key: "Escape" }], scope: "local", allowInEditable: true },
 ]);
 
 /**

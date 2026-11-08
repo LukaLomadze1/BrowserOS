@@ -171,7 +171,7 @@ class SettingsView {
     const brand = createElement("div", {
       className: "settings-sidebar__brand",
       children: [
-        createElement("span", { className: "settings-sidebar__logo", attrs: { "aria-hidden": "true" }, text: "\u2699" }),
+        createIconElement("icon:gear", { className: "settings-sidebar__logo" }),
         createElement("span", { className: "settings-sidebar__title", text: "Settings" }),
       ],
     });
@@ -206,7 +206,7 @@ class SettingsView {
     const search = createElement("div", {
       className: "settings-sidebar__search",
       children: [
-        createElement("span", { className: "settings-sidebar__search-icon", attrs: { "aria-hidden": "true" }, text: "\u2315" }),
+        createIconElement("icon:search", { className: "settings-sidebar__search-icon" }),
         this._searchInputEl,
       ],
     });

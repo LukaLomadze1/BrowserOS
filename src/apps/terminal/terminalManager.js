@@ -36,6 +36,7 @@ class TerminalManager {
    * @param {string} [config.initialPath] - Starting directory, if launched with one. Defaults to "/".
    * @param {() => void} [config.focusWindow] - Bring this Terminal's window forward (used by its notifications).
    * @param {() => boolean} [config.isActive] - Whether this Terminal's window is the active window.
+   * @param {string} [config.greeting] - First line printed by init() (a host such as Code Studio can describe its context).
    */
   constructor(config) {
     this._vfs = config.vfs;
@@ -44,6 +45,7 @@ class TerminalManager {
     this._cwd = config.initialPath ?? "/";
     this._focusWindow = config.focusWindow ?? null;
     this._isActive = config.isActive ?? null;
+    this._greeting = config.greeting ?? 'BrowserOS Terminal \u2014 type "help" to see available commands.';
     /** @type {Set<AbortController>} Commands still running (Ctrl + C interrupts them). */
     this._runningCommands = new Set();
     this._destroyed = false;
@@ -75,8 +77,23 @@ class TerminalManager {
    * @returns {void}
    */
   init() {
-    this._print('BrowserOS Terminal \u2014 type "help" to see available commands.');
+    for (const line of this._greeting.split("\n")) this._print(line);
     this._view.focusInput();
+  }
+
+  /** @returns {string} The current working directory. */
+  getCwd() {
+    return this._cwd;
+  }
+
+  /**
+   * Change the working directory from outside (for example, when the
+   * host's project folder is renamed). The path must exist.
+   * @param {string} path
+   * @returns {void}
+   */
+  setCwd(path) {
+    if (path && path !== this._cwd) this._setCwd(path);
   }
 
   /** @returns {void} */
@@ -337,7 +354,7 @@ class TerminalManager {
       print: (text) => this._print(text),
       clear: () => this._clear(),
       setCwd: (path) => this._setCwd(path),
-      openEntry: (entry) => this._openEntry(entry),
+      openEntry: (entry, appId) => this._openEntry(entry, appId),
       download: (url) => downloadService.download(/^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`, { source: "terminal" }),
     };
   }
@@ -367,10 +384,12 @@ class TerminalManager {
 
   /**
    * @param {object} entry - A VFS entry (file or folder).
+   * @param {string} [appId] - Open with this application instead of the default.
    * @returns {Promise<void>}
    */
-  async _openEntry(entry) {
-    await openVfsEntry(entry, { appManager: this._appManager, recentFilesService: this._recentFilesService });
+  async _openEntry(entry, appId) {
+    if (appId && !this._appManager.isRegistered(appId)) throw new Error(`open: no application "${appId}"`);
+    await openVfsEntry(entry, { appManager: this._appManager, recentFilesService: this._recentFilesService, appId });
     eventBus.emit("terminal:fileOpened", { path: entry.path, kind: entry.type });
   }
 

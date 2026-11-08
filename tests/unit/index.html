@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BrowserOS unit tests</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; background: #fff; color: #151a26; }
+    h1 { font-size: 20px; }
+    .pass { color: #116b3a; }
+    .fail { color: #a4161a; }
+    li { margin: 2px 0; }
+    pre { white-space: pre-wrap; background: #f6f6f8; padding: 8px; color: #333; }
+  </style>
+</head>
+<body>
+  <!-- Serve the repository root with any static server and open /tests/unit/. The
+       file-system tests use a separate, temporary database; BrowserOS data is never touched. -->
+  <main id="output">Running…</main>
+  <script type="module" src="run.js"></script>
+</body>
+</html>

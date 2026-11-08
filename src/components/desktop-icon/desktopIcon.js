@@ -9,7 +9,7 @@
  * moved, it ended). It never decides what those facts mean for
  * selection — that decision lives in exactly one place,
  * DesktopManager + SelectionManager, so click, Ctrl+click, and drag
- * can no longer disagree about what should be selected.
+ * can never disagree about what should be selected.
  *
  * Inline rename (startRename/setLabel/showRenameError) follows the
  * same split: this view owns the input's DOM and interaction, but
@@ -126,8 +126,8 @@ class DesktopIconView {
   }
 
   /**
-   * Replace the label with a text input, pre-selected per the spec
-   * (stem only for files, full name for folders), and wire
+   * Replace the label with a text input, pre-selected like a desktop
+   * file manager (stem only for files, full name for folders), and wire
    * Enter/Escape/blur. `onConfirm` does the actual (async) VFS
    * rename and validation; returning `false` keeps rename mode open
    * with whatever error `showRenameError()` was called with,
@@ -278,12 +278,11 @@ class DesktopIconView {
           e.stopPropagation();
           this._callbacks.onContextMenu(this.id, e.clientX, e.clientY);
         },
-        // Note: this fires as a side effect of the browser's default
-        // mousedown-focuses-the-target behavior, so it must stay a
-        // pure "focus moved here" notification. It used to also
-        // exclusively select this icon, which silently overrode
-        // whatever click/Ctrl+click/drag selection logic had just
-        // decided — that was the root cause of a past selection bug.
+        // This fires as a side effect of the browser's default
+        // mousedown-focuses-the-target behavior, so it must stay a pure
+        // "focus moved here" notification. Selecting here would
+        // override whatever the click, Ctrl+click, or drag selection
+        // logic has just decided.
         focusin: () => this._callbacks.onFocusIn(this.id),
       },
     });

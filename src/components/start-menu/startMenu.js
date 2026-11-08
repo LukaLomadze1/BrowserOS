@@ -12,12 +12,15 @@
 
 import { createElement, clearElement } from "../../utils/dom.js";
 import { createIconElement } from "../../utils/icons.js";
+import { fileAssociations } from "../../core/fileAssociations.js";
 
 class StartMenuView {
   /**
    * @param {object} callbacks
    * @param {(query: string) => void} callbacks.onSearchInput
    * @param {(e: KeyboardEvent) => void} callbacks.onKeyDown - Every keydown that occurs anywhere inside the menu.
+   * @param {() => void} [callbacks.onRestart] - Restart BrowserOS; the button is left out without it.
+   * @param {() => void} [callbacks.onShutDown] - Shut down BrowserOS; the button is left out without it.
    */
   constructor(callbacks) {
     this._callbacks = callbacks;
@@ -216,7 +219,7 @@ class StartMenuView {
     const searchBar = createElement("div", {
       className: "start-menu__search",
       children: [
-        createElement("span", { className: "start-menu__search-icon", attrs: { "aria-hidden": "true" }, text: "\u2315" }),
+        createIconElement("icon:search", { className: "start-menu__search-icon" }),
         this._searchInputEl,
       ],
     });
@@ -278,14 +281,19 @@ class StartMenuView {
     const footer = createElement("div", {
       className: "start-menu__footer",
       children: [
-        createElement("div", { className: "start-menu__brand", text: "BrowserOS" }),
+        createElement("div", {
+          className: "start-menu__brand",
+          children: [
+            createIconElement("icon:browseros", { className: "start-menu__brand-mark brand-mark" }),
+            createElement("span", { text: "BrowserOS" }),
+          ],
+        }),
         createElement("div", {
           className: "start-menu__power",
           attrs: { role: "group", "aria-label": "Power" },
           children: [
-            this._buildPowerButton("Lock", "\u{1F512}"),
-            this._buildPowerButton("Restart", "\u21bb"),
-            this._buildPowerButton("Shut down", "\u23fb"),
+            ...(this._callbacks.onRestart ? [this._buildPowerButton("Restart BrowserOS", "icon:reload", this._callbacks.onRestart)] : []),
+            ...(this._callbacks.onShutDown ? [this._buildPowerButton("Shut down BrowserOS", "icon:power", this._callbacks.onShutDown)] : []),
           ],
         }),
       ],
@@ -308,14 +316,16 @@ class StartMenuView {
 
   /**
    * @param {string} label
-   * @param {string} glyph
+   * @param {string} icon
+   * @param {() => void} onClick
    * @returns {HTMLElement}
    */
-  _buildPowerButton(label, glyph) {
+  _buildPowerButton(label, icon, onClick) {
     return createElement("button", {
       className: "start-menu__power-button",
-      attrs: { type: "button", "aria-label": label, title: label, disabled: "true" },
-      text: glyph,
+      attrs: { type: "button", "aria-label": label, title: label },
+      children: [createIconElement(icon)],
+      on: { click: onClick },
     });
   }
 
@@ -391,7 +401,7 @@ class StartMenuView {
       className: "start-menu__row",
       attrs: { type: "button", "aria-label": fileEntry.name, "data-file-path": fileEntry.path },
       children: [
-        createElement("span", { className: "start-menu__row-icon", attrs: { "aria-hidden": "true" }, text: "\u25a2" }),
+        createIconElement(fileAssociations.getIcon({ type: "file", extension: fileEntry.name.includes(".") ? fileEntry.name.split(".").pop() : null }), { className: "start-menu__row-icon" }),
         createElement("span", {
           className: "start-menu__row-text",
           children: [

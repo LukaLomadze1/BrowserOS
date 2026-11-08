@@ -1,6 +1,6 @@
 /**
- * @file FileExplorerApp — the real File Explorer, replacing the
- * temporary Folder Viewer. Construction/teardown only; all actual
+ * @file FileExplorerApp — the File Explorer application.
+ * Construction/teardown only; all actual
  * behavior lives in ExplorerManager (state/decisions) and
  * ExplorerView (presentation), the same View/Manager split every
  * other window-owning subsystem in BrowserOS follows.
@@ -40,7 +40,7 @@ export default class FileExplorerApp extends Application {
     return {
       element: this._manager.getElement(),
       title: "File Explorer",
-      icon: "\u25a4",
+      icon: "icon:folder",
       width: 760,
       height: 520,
       minWidth: 480,

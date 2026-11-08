@@ -60,6 +60,7 @@ import { openVfsEntry, buildOpenWithItems } from "../../core/vfs/vfsOpener.js";
 import { importHostFiles } from "../../core/vfs/fileImport.js";
 import { fileAssociations } from "../../core/fileAssociations.js";
 import { showMessageDialog } from "../../components/dialog/messageDialog.js";
+import { showFolderPickerDialog } from "../../components/dialog/folderPickerDialog.js";
 import { pasteClipboard } from "../../core/vfs/clipboardPaste.js";
 import { getParentPath } from "../../core/vfs/pathResolver.js";
 import { generateDefaultName, splitNameForRename } from "../../utils/nameGenerator.js";
@@ -83,16 +84,16 @@ const STARTUP_PATHS = Object.freeze({
 });
 
 const SIDEBAR_LOCATIONS = [
-  { key: "home", label: "Home", path: HOME_PATH, icon: "\u2302" },
-  { key: "desktop", label: "Desktop", path: "/Desktop", icon: "\u25a6" },
-  { key: "documents", label: "Documents", path: "/Documents", icon: "\u25a4" },
-  { key: "downloads", label: "Downloads", path: "/Downloads", icon: "\u25bc" },
-  { key: "pictures", label: "Pictures", path: "/Pictures", icon: "\u25a7" },
-  { key: "music", label: "Music", path: "/Music", icon: "\u266a" },
-  { key: "videos", label: "Videos", path: "/Videos", icon: "\u25b6" },
-  { key: "applications", label: "Applications", path: "/Applications", icon: "\u25a3" },
-  { key: "trash", label: "Trash", path: "/Trash", icon: "\u267b" },
-  { key: "favorites", label: "Favorites", path: FAVORITES_PATH, icon: "\u2605" },
+  { key: "home", label: "Home", path: HOME_PATH, icon: "icon:home" },
+  { key: "desktop", label: "Desktop", path: "/Desktop", icon: "icon:display" },
+  { key: "documents", label: "Documents", path: "/Documents", icon: "icon:file-text" },
+  { key: "downloads", label: "Downloads", path: "/Downloads", icon: "icon:download" },
+  { key: "pictures", label: "Pictures", path: "/Pictures", icon: "icon:image" },
+  { key: "music", label: "Music", path: "/Music", icon: "icon:music" },
+  { key: "videos", label: "Videos", path: "/Videos", icon: "icon:video" },
+  { key: "applications", label: "Applications", path: "/Applications", icon: "icon:apps" },
+  { key: "trash", label: "Trash", path: "/Trash", icon: "icon:trash" },
+  { key: "favorites", label: "Favorites", path: FAVORITES_PATH, icon: "icon:star" },
 ];
 
 class ExplorerManager {
@@ -774,9 +775,9 @@ class ExplorerManager {
         this._marqueeEl.remove();
         this._marqueeEl = null;
       }
-      // Bug #1 fix: see class-level comment. A marquee never makes
-      // any row the pointerdown target, so without this, Delete right
-      // after a rectangle selection silently did nothing.
+      // A marquee never makes any row the pointerdown target, so focus
+      // moves to the list here; otherwise Delete right after a
+      // rectangle selection would not reach the list's key handler.
       this._focusAfterMarquee();
     };
     document.addEventListener("pointermove", onMove);
@@ -1140,6 +1141,10 @@ class ExplorerManager {
   async _deleteSelection() {
     const entries = this._items.filter((item) => this._selection.has(item.id));
     if (entries.length === 0) return;
+    if (this._isInTrash(entries[0].path)) {
+      await this._deletePermanently(entries);
+      return;
+    }
 
     const confirmMode = this._prefs["fileExplorer.confirmTrash"];
     const isNonEmptyFolder = entries.length === 1 && (await this._anyNonEmptyFolder(entries));
@@ -1180,6 +1185,85 @@ class ExplorerManager {
       });
     } else if (isLargeOperation(moved, startedAt)) {
       notifyOperation({ type: "success", title: `Moved ${plural(moved, "item")} to Trash`, folderPath: "/Trash" });
+    }
+  }
+
+  /**
+   * Items already in Trash are removed for good, always after confirmation.
+   * @param {object[]} entries
+   * @returns {Promise<void>}
+   */
+  async _deletePermanently(entries) {
+    const message =
+      entries.length === 1
+        ? `Permanently delete "${entries[0].name}"${entries[0].type === "folder" ? " and everything in it" : ""}? This can't be undone.`
+        : `Permanently delete these ${entries.length} items? This can't be undone.`;
+    const confirmed = await showConfirmDialog({ title: "Delete permanently", message, confirmLabel: "Delete permanently", destructive: true });
+    if (!confirmed) return;
+    const failures = [];
+    for (const entry of entries) {
+      try {
+        await this._vfs.deletePermanently(entry.path);
+      } catch (error) {
+        failures.push({ name: entry.name, message: error.message });
+      }
+    }
+    if (failures.length > 0) {
+      await this._showErrorDialog(
+        failures.length === 1 ? `Couldn't delete "${failures[0].name}"` : `${plural(failures.length, "item")} couldn't be deleted`,
+        failures.slice(0, 3).map((failure) => `${failure.name}: ${failure.message}`).join(" · ")
+      );
+    }
+  }
+
+  /**
+   * Put the selected Trash items back where they came from.
+   * @returns {Promise<void>}
+   */
+  async _restoreSelection() {
+    const entries = this._items.filter((item) => this._selection.has(item.id));
+    const failures = [];
+    let restored = 0;
+    for (const entry of entries) {
+      try {
+        try {
+          await this._vfs.restore(entry.path);
+        } catch (error) {
+          if (error?.code !== "NO_ORIGINAL_LOCATION") throw error;
+          const folder = await showFolderPickerDialog({ vfs: this._vfs, title: `Restore "${entry.name}" to`, initialPath: "/Documents" });
+          if (!folder) continue;
+          await this._vfs.restore(entry.path, { destination: folder });
+        }
+        restored += 1;
+      } catch (error) {
+        failures.push({ name: entry.name, message: error.message });
+      }
+    }
+    if (failures.length > 0) {
+      await this._showErrorDialog(
+        failures.length === 1 ? `Couldn't restore "${failures[0].name}"` : `${plural(failures.length, "item")} couldn't be restored`,
+        failures.slice(0, 3).map((failure) => `${failure.name}: ${failure.message}`).join(" · ")
+      );
+    } else if (restored > 1) {
+      notifyOperation({ type: "success", title: `Restored ${plural(restored, "item")}`, folderPath: "/Trash" });
+    }
+  }
+
+  /** @returns {Promise<void>} */
+  async _emptyTrash() {
+    const count = (await this._vfs.list("/Trash")).length;
+    if (count === 0) return;
+    const confirmed = await showConfirmDialog({
+      title: "Empty Trash",
+      message: `Permanently delete ${count === 1 ? "the item" : `all ${count} items`} in Trash? This can't be undone.`,
+      confirmLabel: "Empty Trash",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await this._vfs.emptyTrash();
+    } catch (error) {
+      await this._showErrorDialog("Couldn't empty Trash", error.message);
     }
   }
 
@@ -1359,6 +1443,20 @@ class ExplorerManager {
     const isSingle = selectedEntries.length === 1;
     const entry = selectedEntries[0];
 
+    if (this._isInTrash(this._path)) {
+      const trashItems = [{ label: "Open", action: () => { for (const selected of selectedEntries) this._openItem(selected.id); } }, { separator: true }];
+      if (this._path === "/Trash") trashItems.push({ label: "Restore", action: () => this._restoreSelection() });
+      trashItems.push(
+        { label: "Delete permanently", action: () => this._deleteSelection() },
+        { separator: true },
+        { label: "Copy", action: () => this._copySelection() },
+        { separator: true },
+        { label: "Properties", disabled: !isSingle, action: () => this._showProperties(entry?.id) }
+      );
+      this._contextMenu.show(trashItems, { x, y }, { onClose: () => {} });
+      return;
+    }
+
     const items = [{ label: "Open", action: () => { for (const selected of selectedEntries) this._openItem(selected.id); } }];
     if (isSingle && entry.type === "folder") {
       items.push({ label: "Open in New Window", action: () => this._openInNewWindow(entry.path) });
@@ -1391,6 +1489,13 @@ class ExplorerManager {
    */
   _showEmptyContextMenu(x, y) {
     if (this._path === HOME_PATH || this._path === FAVORITES_PATH) return;
+    if (this._isInTrash(this._path)) {
+      // Trash holds deleted items only: no new files, no paste.
+      const trashItems = [{ label: "Refresh", action: () => this.refresh() }];
+      if (this._path === "/Trash") trashItems.push({ separator: true }, { label: "Empty Trash", disabled: this._items.length === 0, action: () => this._emptyTrash() });
+      this._contextMenu.show(trashItems, { x, y }, { onClose: () => {} });
+      return;
+    }
     const items = [
       {
         label: "New",

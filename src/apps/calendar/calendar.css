@@ -67,12 +67,12 @@
 
 .calendar__button--primary {
   border-color: transparent;
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   color: var(--color-text-on-accent);
 }
 
 .calendar__button--primary:hover {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary-strong);
   filter: brightness(1.08);
 }
 

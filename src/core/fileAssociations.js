@@ -22,20 +22,26 @@ import { eventBus } from "./eventBus.js";
  * @property {string} [description] - Human description of the file type.
  */
 
-const FOLDER_GLYPH = "\u25a4";
-const GENERIC_FILE_GLYPH = "\u25a2";
-const TYPE_GLYPHS = Object.freeze({
-  note: "\u2263",
-  txt: "\u2263",
-  md: "\u2263",
-  png: "\u25a7",
-  jpg: "\u25a7",
-  jpeg: "\u25a7",
-  webp: "\u25a7",
-  gif: "\u25a7",
-  svg: "\u25a7",
-  html: "\u25ce",
-  htm: "\u25ce",
+const FOLDER_ICON = "icon:folder";
+const GENERIC_FILE_ICON = "icon:file";
+const TYPE_ICONS = Object.freeze({
+  note: "icon:notes",
+  txt: "icon:file-text",
+  md: "icon:file-text",
+  log: "icon:file-text",
+  csv: "icon:file-text",
+  png: "icon:image",
+  jpg: "icon:image",
+  jpeg: "icon:image",
+  webp: "icon:image",
+  gif: "icon:image",
+  svg: "icon:image",
+  html: "icon:file-code",
+  htm: "icon:file-code",
+  css: "icon:file-code",
+  js: "icon:file-code",
+  mjs: "icon:file-code",
+  json: "icon:file-code",
 });
 
 /** @type {ReadonlyArray<FileAssociation>} */
@@ -108,11 +114,11 @@ class FileAssociations {
 
   /**
    * @param {object} entry - A VFS entry.
-   * @returns {string} A glyph for the entry's type, shared by Desktop and File Explorer.
+   * @returns {string} The built-in icon for the entry's type ("icon:<name>", see utils/icons.js), shared by Desktop, File Explorer, and Start Menu.
    */
   getIcon(entry) {
-    if (entry.type === "folder") return FOLDER_GLYPH;
-    return TYPE_GLYPHS[entry.extension] ?? GENERIC_FILE_GLYPH;
+    if (entry.type === "folder") return FOLDER_ICON;
+    return TYPE_ICONS[(entry.extension ?? "").toLowerCase()] ?? GENERIC_FILE_ICON;
   }
 }
 

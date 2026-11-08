@@ -1,16 +1,168 @@
 /**
- * Styles for the Recycle Bin placeholder. Scoped under .recycle-bin.
+ * Styles for the Recycle Bin window. Scoped under .recycle-bin.
  */
 
+.window__body:has(> .recycle-bin) {
+  padding: 0;
+  overflow: hidden;
+}
+
 .recycle-bin {
+  --recycle-bin-columns: minmax(160px, 2fr) minmax(120px, 1.4fr) minmax(130px, 1.1fr) minmax(70px, 0.6fr);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-window-body-bg);
+  color: var(--color-text-primary);
+  container: recycle-bin / inline-size;
+}
+
+.recycle-bin__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-surface-glass-border);
+  flex-wrap: wrap;
+}
+
+.recycle-bin__spacer {
+  flex: 1;
+}
+
+.recycle-bin__button {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-surface-glass-border-strong);
+  background: var(--color-surface-glass);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+}
+
+.recycle-bin__button:hover:not(:disabled) {
+  background: var(--color-surface-glass-strong);
+}
+
+.recycle-bin__button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.recycle-bin__button--primary:not(:disabled) {
+  border-color: transparent;
+  background: var(--color-accent-primary);
+  color: var(--color-text-on-accent);
+  font-weight: 600;
+}
+
+.recycle-bin__button:focus-visible {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: 1px;
+}
+
+.recycle-bin__columns,
+.recycle-bin__row {
+  display: grid;
+  grid-template-columns: var(--recycle-bin-columns);
+  gap: var(--space-3);
+  align-items: center;
+  padding: 0 var(--space-4);
+}
+
+.recycle-bin__columns {
+  height: 30px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-surface-glass-border);
+}
+
+.recycle-bin__columns[hidden] {
+  display: none;
+}
+
+.recycle-bin__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-1) 0;
+  outline: none;
+}
+
+.recycle-bin__list[hidden] {
+  display: none;
+}
+
+.recycle-bin__list:focus-visible .recycle-bin__row--focused {
+  outline: 2px solid var(--color-accent-primary);
+  outline-offset: -2px;
+}
+
+.recycle-bin__row {
+  height: 34px;
+  font-size: var(--text-sm);
+  border-radius: var(--radius-sm);
+  margin: 0 var(--space-2);
+  padding: 0 var(--space-2);
+  cursor: default;
+  user-select: none;
+}
+
+.recycle-bin__row:hover {
+  background: var(--color-surface-glass);
+}
+
+.recycle-bin__row--selected,
+.recycle-bin__row--selected:hover {
+  background: var(--color-accent-soft);
+}
+
+.recycle-bin__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.recycle-bin__icon {
+  flex: none;
+  color: var(--color-text-secondary);
+}
+
+.recycle-bin__label,
+.recycle-bin__cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recycle-bin__cell {
+  color: var(--color-text-secondary);
+}
+
+.recycle-bin__cell--size {
+  text-align: right;
+}
+
+.recycle-bin__empty {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: var(--space-2);
-  height: 100%;
+  padding: var(--space-4);
   color: var(--color-text-secondary);
+}
+
+.recycle-bin__empty[hidden] {
+  display: none;
 }
 
 .recycle-bin__glyph {
@@ -28,7 +180,34 @@
 
 .recycle-bin__hint {
   margin: 0;
-  max-width: 260px;
+  max-width: 320px;
   font-size: var(--text-sm);
   line-height: 1.5;
+}
+
+.recycle-bin__footer {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 var(--space-4);
+  border-top: 1px solid var(--color-surface-glass-border);
+}
+
+.recycle-bin__summary {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Narrow windows keep the name and original location only. */
+@container recycle-bin (max-width: 560px) {
+  .recycle-bin__columns,
+  .recycle-bin__row {
+    grid-template-columns: minmax(120px, 1fr) minmax(90px, 0.8fr);
+  }
+
+  .recycle-bin__columns span:nth-child(n + 3),
+  .recycle-bin__row > :nth-child(n + 3) {
+    display: none;
+  }
 }

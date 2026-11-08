@@ -40,7 +40,7 @@ export default class TerminalApp extends Application {
     return {
       element: this._manager.getElement(),
       title: "Terminal",
-      icon: "\u276f",
+      icon: "icon:terminal",
       width: 620,
       height: 420,
       minWidth: 360,

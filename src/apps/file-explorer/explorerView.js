@@ -17,6 +17,7 @@
  */
 
 import { createElement, clearElement } from "../../utils/dom.js";
+import { createIconElement } from "../../utils/icons.js";
 
 class ExplorerView {
   /**
@@ -122,9 +123,11 @@ class ExplorerView {
   setColumnVisibility(columns) {
     this._columns = { ...columns };
     const tracks = ["minmax(0, 1fr)"];
-    if (columns.modified) tracks.push("140px");
-    if (columns.type) tracks.push("100px");
-    if (columns.size) tracks.push("90px");
+    // Fixed widths, narrowed proportionally in small windows so the
+    // name column always keeps most of the space.
+    if (columns.modified) tracks.push("min(140px, 26%)");
+    if (columns.type) tracks.push("min(100px, 18%)");
+    if (columns.size) tracks.push("min(90px, 16%)");
     // One per-window custom property keeps the header and every row on
     // the same grid tracks.
     this._el.style.setProperty("--explorer-details-columns", tracks.join(" "));
@@ -209,7 +212,7 @@ class ExplorerView {
           className: "explorer__sidebar-item",
           attrs: { type: "button", "data-sidebar-path": item.path },
           children: [
-            createElement("span", { className: "explorer__sidebar-icon", attrs: { "aria-hidden": "true" }, text: item.icon }),
+            createIconElement(item.icon, { className: "explorer__sidebar-icon" }),
             createElement("span", { className: "explorer__sidebar-label", text: item.label }),
           ],
           on: { click: () => this._callbacks.onSidebarNavigate(item.path) },
@@ -281,12 +284,12 @@ class ExplorerView {
    * @returns {HTMLElement}
    */
   _buildRow(item, rowCallbacks) {
-    const icon = item._icon ?? (item.type === "folder" ? "\u25a4" : "\u25a2");
+    const icon = item._icon ?? (item.type === "folder" ? "icon:folder" : "icon:file");
     const classNames = ["explorer__row"];
     if (item._selected) classNames.push("explorer__row--selected");
     if (item._cut) classNames.push("explorer__row--cut");
 
-    const iconEl = createElement("span", { className: "explorer__row-icon", attrs: { "aria-hidden": "true" }, text: icon });
+    const iconEl = createIconElement(icon, { className: "explorer__row-icon" });
     const displayName = item._displayName ?? item.name;
     const nameEl = createElement("span", { className: "explorer__row-name", text: displayName });
     const columns = this._columns;
@@ -467,11 +470,7 @@ class ExplorerView {
               className: "explorer__row explorer__row--home",
               attrs: { type: "button" },
               children: [
-                createElement("span", {
-                  className: "explorer__row-icon",
-                  attrs: { "aria-hidden": "true" },
-                  text: entry._icon ?? (entry.type === "folder" ? "\u25a4" : "\u25a2"),
-                }),
+                createIconElement(entry._icon ?? (entry.type === "folder" ? "icon:folder" : "icon:file"), { className: "explorer__row-icon" }),
                 createElement("span", { className: "explorer__row-name", text: entry.name }),
                 createElement("span", { className: "explorer__row-type", text: entry.path }),
               ],
@@ -510,10 +509,10 @@ class ExplorerView {
 
   /** @returns {void} */
   _buildDom() {
-    this._backButton = this._navButton("\u2039", "Back", () => this._callbacks.onBack());
-    this._forwardButton = this._navButton("\u203a", "Forward", () => this._callbacks.onForward());
-    this._upButton = this._navButton("\u2191", "Up one level", () => this._callbacks.onUp());
-    const refreshButton = this._navButton("\u21bb", "Refresh", () => this._callbacks.onRefresh());
+    this._backButton = this._navButton("icon:arrowLeft", "Back", () => this._callbacks.onBack());
+    this._forwardButton = this._navButton("icon:arrowRight", "Forward", () => this._callbacks.onForward());
+    this._upButton = this._navButton("icon:arrowUp", "Up one level", () => this._callbacks.onUp());
+    const refreshButton = this._navButton("icon:reload", "Refresh", () => this._callbacks.onRefresh());
 
     const navGroup = createElement("div", {
       className: "explorer__nav-buttons",
@@ -565,9 +564,9 @@ class ExplorerView {
     });
 
     this._viewModeButtons = {
-      grid: this._viewButton("\u25a6", "Grid view", "grid"),
-      list: this._viewButton("\u2630", "List view", "list"),
-      details: this._viewButton("\u2261", "Details view", "details"),
+      grid: this._viewButton("icon:apps", "Grid view", "grid"),
+      list: this._viewButton("icon:list", "List view", "list"),
+      details: this._viewButton("icon:rows", "Details view", "details"),
     };
     const viewModeGroup = createElement("div", {
       className: "explorer__view-buttons",
@@ -655,16 +654,16 @@ class ExplorerView {
   }
 
   /**
-   * @param {string} glyph
+   * @param {string} icon - A built-in icon ("icon:<name>").
    * @param {string} label
    * @param {() => void} onClick
    * @returns {HTMLElement}
    */
-  _navButton(glyph, label, onClick) {
+  _navButton(icon, label, onClick) {
     return createElement("button", {
       className: "explorer__nav-button",
       attrs: { type: "button", "aria-label": label, title: label },
-      text: glyph,
+      children: [createIconElement(icon)],
       on: { click: onClick },
     });
   }
@@ -684,16 +683,16 @@ class ExplorerView {
   }
 
   /**
-   * @param {string} glyph
+   * @param {string} icon - A built-in icon ("icon:<name>").
    * @param {string} label
    * @param {"grid"|"list"|"details"} mode
    * @returns {HTMLElement}
    */
-  _viewButton(glyph, label, mode) {
+  _viewButton(icon, label, mode) {
     return createElement("button", {
       className: "explorer__view-button",
       attrs: { type: "button", "aria-label": label, title: label },
-      text: glyph,
+      children: [createIconElement(icon)],
       on: { click: () => this._callbacks.onViewModeChange(mode) },
     });
   }

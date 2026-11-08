@@ -1,6 +1,6 @@
 /**
  * @file Key/value persistence for small system state (theme choice,
- * preferences, window positions, etc).
+ * preferences, window positions, histories).
  *
  * This is intentionally scoped to localStorage. Files and folders live
  * in the virtual file system (src/core/vfs/), which is backed by
@@ -9,6 +9,13 @@
  * A failed write (for example, storage full or blocked) is logged and
  * announced as "storage:writeFailed" { key, message } so the storage
  * monitor can warn the user.
+ *
+ * Backups: `exportItems()` returns every BrowserOS entry as stored, and
+ * `replaceItems()` swaps them all for a backup's (putting the previous
+ * ones back if the browser refuses). After a restore, `freeze()` stops
+ * this page from writing anything else before it reloads, so services
+ * saving their in-memory state on unload can't overwrite what was just
+ * restored.
  */
 
 import { eventBus } from "./eventBus.js";
@@ -22,6 +29,7 @@ class StorageService {
    */
   constructor(namespace) {
     this._namespace = namespace;
+    this._frozen = false;
   }
 
   /**
@@ -57,6 +65,7 @@ class StorageService {
    * @returns {boolean} Whether the write succeeded.
    */
   set(key, value) {
+    if (this._frozen) return false;
     try {
       window.localStorage.setItem(this._namespaced(key), JSON.stringify(value));
       return true;
@@ -72,7 +81,12 @@ class StorageService {
    * @returns {void}
    */
   remove(key) {
-    window.localStorage.removeItem(this._namespaced(key));
+    if (this._frozen) return;
+    try {
+      window.localStorage.removeItem(this._namespaced(key));
+    } catch (error) {
+      console.error(`[Storage] failed to remove "${key}":`, error);
+    }
   }
 
   /**
@@ -80,15 +94,70 @@ class StorageService {
    * @returns {void}
    */
   clear() {
+    if (this._frozen) return;
+    for (const key of this._namespacedKeys()) window.localStorage.removeItem(key);
+  }
+
+  /**
+   * Every BrowserOS entry, by key without the namespace prefix, with
+   * its stored (JSON) text.
+   * @returns {Record<string, string>}
+   */
+  exportItems() {
+    const items = {};
     const prefix = `${this._namespace}:`;
-    const keysToRemove = [];
+    for (const key of this._namespacedKeys()) {
+      const value = window.localStorage.getItem(key);
+      if (value !== null) items[key.slice(prefix.length)] = value;
+    }
+    return items;
+  }
+
+  /**
+   * Replace every BrowserOS entry with `items` (key without prefix →
+   * stored JSON text). If the browser refuses part-way (storage full),
+   * the previous entries are put back and the error is thrown.
+   * @param {Record<string, string>} items
+   * @returns {void}
+   * @throws {Error} The browser's storage error.
+   */
+  replaceItems(items) {
+    if (this._frozen) throw new Error("Storage is frozen until BrowserOS reloads");
+    const previous = this.exportItems();
+    const write = (values) => {
+      for (const key of this._namespacedKeys()) window.localStorage.removeItem(key);
+      for (const [key, value] of Object.entries(values)) window.localStorage.setItem(this._namespaced(key), value);
+    };
+    try {
+      write(items);
+    } catch (error) {
+      try {
+        write(previous);
+      } catch (rollbackError) {
+        console.error("[Storage] could not put the previous values back:", rollbackError);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Ignore every later write from this page (used right before a reload
+   * that follows a restore).
+   * @returns {void}
+   */
+  freeze() {
+    this._frozen = true;
+  }
+
+  /** @returns {string[]} Full localStorage keys belonging to BrowserOS. */
+  _namespacedKeys() {
+    const prefix = `${this._namespace}:`;
+    const keys = [];
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i);
-      if (key && key.startsWith(prefix)) {
-        keysToRemove.push(key);
-      }
+      if (key && key.startsWith(prefix)) keys.push(key);
     }
-    keysToRemove.forEach((key) => window.localStorage.removeItem(key));
+    return keys;
   }
 }
 

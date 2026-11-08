@@ -103,7 +103,7 @@ export default class FileExplorerPage extends SettingsPage {
           this.selectRow(
             "fileExplorer.confirmTrash",
             "Confirm before moving to Trash",
-            "Deleting always moves items to the Trash folder. BrowserOS has no permanent deletion, so there is nothing further to confirm.",
+            "Deleting moves items to Trash, where Recycle Bin can restore them. Deleting items permanently from Trash always asks first.",
             CONFIRM_OPTIONS
           ).element,
         ],

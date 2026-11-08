@@ -1,6 +1,6 @@
 /**
  * Start Menu styles. Kept entirely separate from desktop.css and
- * window.css per this step's spec — nothing here leaks into either.
+ * window.css — nothing here leaks into either.
  */
 
 .start-menu {
@@ -227,13 +227,18 @@
 }
 
 .start-menu__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-family: var(--font-display);
   font-size: var(--text-sm);
   font-weight: 600;
-  background: var(--color-accent-gradient);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--color-text-primary);
+}
+
+.start-menu__brand-mark {
+  display: inline-flex;
+  font-size: 16px;
 }
 
 .start-menu__power {
@@ -249,9 +254,14 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  font-size: var(--text-md);
-  color: var(--color-text-tertiary);
-  cursor: not-allowed;
+  font-size: 16px;
+  color: var(--color-text-secondary);
+  transition: background var(--duration-fast) var(--ease-sharp), color var(--duration-fast) var(--ease-sharp);
+}
+
+.start-menu__power-button:hover {
+  background: var(--color-surface-glass-strong);
+  color: var(--color-text-primary);
 }
 
 :root[data-reduced-motion="on"] .start-menu {

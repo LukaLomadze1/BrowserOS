@@ -1,8 +1,8 @@
 /**
  * @file ConfirmDialog — the BrowserOS-styled replacement for
- * `window.confirm()`. Used before destructive actions the spec flags
- * as needing confirmation (deleting a non-empty folder, deleting
- * multiple items).
+ * `window.confirm()`. Used before destructive actions (deleting a
+ * non-empty folder or several items, deleting permanently, replacing
+ * data from a backup).
  */
 
 import { openDialog } from "./dialog.js";

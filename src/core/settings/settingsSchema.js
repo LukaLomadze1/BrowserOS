@@ -20,6 +20,7 @@
  *   taskManager   Task Manager refresh rate.
  *   browser       Search engine, homepage, bookmarks bar, start page, history retention (Browser).
  *   downloads     Download size limit and completion notifications (DownloadService).
+ *   codeStudio    Editor theme, font, indentation, wrapping, and live preview (Code Studio).
  *
  * Descriptor fields:
  *
@@ -63,7 +64,7 @@ export const WALLPAPER_PRESETS = Object.freeze([
 ]);
 
 /** Apps pinned to the Start Menu on first boot and after a reset. */
-export const DEFAULT_PINNED_APP_IDS = Object.freeze(["browser", "notes", "calendar", "calculator", "clock", "file-explorer", "settings", "about", "recycle-bin"]);
+export const DEFAULT_PINNED_APP_IDS = Object.freeze(["browser", "code-studio", "notes", "calendar", "calculator", "clock", "file-explorer", "settings", "about", "recycle-bin"]);
 
 const CONFIRM_TRASH_VALUES = ["always", "smart", "never"];
 
@@ -654,6 +655,79 @@ export const SETTINGS_SCHEMA = freezeSchema({
     defaultValue: true,
     persist: true,
     description: "Show a notification when a download finishes (failures are always reported).",
+  },
+
+  // ---------------------------------------------------------------
+  // Code Studio
+  // ---------------------------------------------------------------
+  "codeStudio.theme": {
+    category: "codeStudio",
+    type: "string",
+    defaultValue: "system",
+    allowedValues: ["system", "dark", "light"],
+    persist: true,
+    description: "Editor color theme; system follows the BrowserOS theme.",
+  },
+  "codeStudio.fontSize": {
+    category: "codeStudio",
+    type: "number",
+    defaultValue: 14,
+    min: 10,
+    max: 24,
+    integer: true,
+    persist: true,
+    description: "Editor font size in pixels.",
+  },
+  "codeStudio.fontFamily": {
+    category: "codeStudio",
+    type: "string",
+    defaultValue: "system-mono",
+    allowedValues: ["system-mono", "jetbrains-mono", "consolas", "courier", "menlo"],
+    persist: true,
+    description: "Editor font family (monospace stacks only).",
+  },
+  "codeStudio.tabWidth": {
+    category: "codeStudio",
+    type: "number",
+    defaultValue: 2,
+    allowedValues: [2, 4, 8],
+    persist: true,
+    description: "Columns per indentation level.",
+  },
+  "codeStudio.insertSpaces": {
+    category: "codeStudio",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Indent with spaces instead of tab characters.",
+  },
+  "codeStudio.lineNumbers": {
+    category: "codeStudio",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Show line numbers in the editor gutter.",
+  },
+  "codeStudio.wordWrap": {
+    category: "codeStudio",
+    type: "boolean",
+    defaultValue: false,
+    persist: true,
+    description: "Wrap long lines to the editor width.",
+  },
+  "codeStudio.autoPreview": {
+    category: "codeStudio",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Rebuild the live preview while typing (otherwise on save and Run).",
+  },
+  "codeStudio.autoCloseBrackets": {
+    category: "codeStudio",
+    type: "boolean",
+    defaultValue: true,
+    persist: true,
+    description: "Insert the closing bracket or quote when typing an opening one.",
   },
 });
 

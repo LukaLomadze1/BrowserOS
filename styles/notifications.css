@@ -102,7 +102,7 @@
 
 .notification--info .notification__icon,
 .notification--alarm .notification__icon {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   color: var(--color-text-on-accent);
 }
 

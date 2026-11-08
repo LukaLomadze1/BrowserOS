@@ -36,9 +36,10 @@ class ContextMenu {
   }
 
   /**
-   * @param {Array<{label?: string, action?: () => void, disabled?: boolean, separator?: boolean, submenu?: Array, checked?: boolean, radio?: boolean}>} items -
+   * @param {Array<{label?: string, action?: () => void, disabled?: boolean, separator?: boolean, submenu?: Array, checked?: boolean, radio?: boolean, shortcut?: string}>} items -
    *   `checked` renders a check mark and a menuitemcheckbox role (menuitemradio when `radio`
-   *   is also set) for items that reflect an on/off or one-of-many state.
+   *   is also set) for items that reflect an on/off or one-of-many state. `shortcut` shows
+   *   a key hint (e.g. "Ctrl + S") at the end of the item.
    * @param {{x: number, y: number}|{itemRect: DOMRect}} anchor - Either viewport coordinates (top-level menus) or a trigger item's rect (submenus, anchored beside it).
    * @param {{onClose?: () => void, parentMenu?: ContextMenu}} [options] - `onClose` fires once, whenever the menu closes for any reason. `parentMenu` is set internally when opening a submenu.
    * @returns {void}
@@ -158,6 +159,11 @@ class ContextMenu {
         createElement("span", { className: "context-menu__item-check", attrs: { "aria-hidden": "true" }, text: item.checked ? "\u2713" : "" }),
         createElement("span", { className: "context-menu__item-label", text: item.label }),
       ];
+    }
+    if (item.shortcut && !hasSubmenu) {
+      children = children ?? [createElement("span", { className: "context-menu__item-label", text: item.label })];
+      children.push(createElement("span", { className: "context-menu__item-shortcut", text: item.shortcut }));
+      attrs["aria-keyshortcuts"] = item.shortcut.replace(/\s*\+\s*/g, "+");
     }
 
     const className = [

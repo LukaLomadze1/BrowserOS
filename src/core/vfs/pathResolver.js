@@ -5,11 +5,9 @@
  * combines these with actual lookups.
  *
  * Every public VirtualFileSystem method accepts an optional
- * `currentDir` (defaulting to "/") alongside its path argument,
- * purely so relative paths already work today — this is the "prepare
- * for future Terminal support" surface the spec asks for. A Terminal
- * app just needs to track its own working directory and pass it
- * through; nothing here needs to change.
+ * `currentDir` (defaulting to "/") alongside its path argument, so
+ * relative paths resolve the way a shell resolves them: Terminal
+ * tracks its working directory and passes it through.
  */
 
 import { VFSError } from "./vfsError.js";

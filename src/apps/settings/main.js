@@ -43,7 +43,7 @@ export default class SettingsApp extends Application {
     return {
       element: this._manager.getElement(),
       title: "Settings",
-      icon: "\u2699",
+      icon: "icon:gear",
       width: 900,
       height: 620,
       minWidth: 560,

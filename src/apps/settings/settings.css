@@ -79,7 +79,7 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-sm);
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   color: var(--color-text-on-accent);
   font-size: var(--text-md);
 }
@@ -889,7 +889,7 @@ label:has(> .settings-choice__input:checked) .settings-choice__check {
   height: 20px;
   margin-top: -10px;
   border-radius: var(--radius-round);
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   box-shadow: var(--shadow-popover);
   transition: left var(--duration-slow) var(--ease-standard);
 }

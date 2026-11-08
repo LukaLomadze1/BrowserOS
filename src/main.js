@@ -1,6 +1,12 @@
 /**
  * @file BrowserOS entry point.
  *
+ * Before anything else: BrowserOS refuses to start inside a frame of
+ * its own origin, and waits until this tab holds the session — one
+ * active tab per browser profile (src/core/system/sessionGuard.js).
+ * If start-up fails (for example, browser storage can't be opened), a
+ * full-window notice explains why instead of a half-built desktop.
+ *
  * Boot order: SettingsService loads, migrates, and validates the
  * persisted settings document → ThemeManager applies the appearance
  * settings to <html> before the desktop renders (the render-blocking
@@ -17,11 +23,18 @@
  * AppManager, the VFS, RecentFilesService, and the shared
  * ClipboardService, then reads `/Desktop` and renders it alongside
  * the application shortcuts → StartMenuManager attaches to
- * AppManager, the VFS, and RecentFilesService → About BrowserOS is
- * the only app auto-launched.
+ * AppManager, the VFS, and RecentFilesService → background services
+ * start → on a new installation, the Welcome tour opens
+ * (src/apps/welcome/); otherwise the desktop opens with no windows.
+ *
+ * The start-up screen in index.html shows each of these stages as it
+ * finishes (src/core/system/bootScreen.js) and fades out once the
+ * desktop is ready.
  *
  * System applications: Notes, Calculator, Calendar, Clock, and Image
- * Viewer are registered alongside the shell apps. Calendar reminders
+ * Viewer are registered alongside the shell apps, and Code Studio (the
+ * IDE, see src/apps/code-studio/) with its additional-window and
+ * preview-window entries. Calendar reminders
  * and Clock alarms/timers are owned by CalendarService and
  * ClockService, which start right after the VFS so they keep working
  * whether or not their windows are open. Files open in the application
@@ -38,8 +51,7 @@
  * and re-applies them live when they change.
  *
  * The VFS must be ready before DesktopManager and RecentFilesService
- * start — that's why `vfs.init()` moved earlier and is awaited before
- * constructing them.
+ * start, so `vfs.init()` is awaited before constructing them.
  *
  * File Explorer opens automatically whenever a folder is opened
  * (Desktop double-click, Start Menu, another Explorer window) via
@@ -72,6 +84,7 @@
  */
 
 import { settingsService } from "./core/settings/settingsService.js";
+import { eventBus } from "./core/eventBus.js";
 import { themeManager } from "./core/theme.js";
 import { Desktop } from "./core/desktop.js";
 import { WindowManager } from "./core/windowManager.js";
@@ -86,7 +99,6 @@ import { calendarService } from "./core/calendar/calendarService.js";
 import { clockService } from "./core/clock/clockService.js";
 import { notificationService } from "./core/notifications/notificationService.js";
 import { fileAssociations } from "./core/fileAssociations.js";
-import { seedSamplePictures } from "./core/vfs/sampleContent.js";
 import { openVfsEntry } from "./core/vfs/vfsOpener.js";
 import { serviceManager } from "./core/services/serviceManager.js";
 import { systemClock } from "./core/shell/systemClock.js";
@@ -96,6 +108,11 @@ import { storageMonitor } from "./core/system/storageMonitor.js";
 import { bookmarkService } from "./core/browser/bookmarkService.js";
 import { historyService } from "./core/browser/historyService.js";
 import { downloadService } from "./core/downloads/downloadService.js";
+import { sessionGuard } from "./core/system/sessionGuard.js";
+import { showSystemScreen } from "./components/system-screen/systemScreen.js";
+import { showConfirmDialog } from "./components/dialog/confirmDialog.js";
+import { bootScreen } from "./core/system/bootScreen.js";
+import { onboarding } from "./core/onboarding.js";
 
 /** App ids shown as desktop shortcuts; names and icons come from AppManager. */
 const DESKTOP_SHORTCUT_APPS = [
@@ -107,12 +124,53 @@ const DESKTOP_SHORTCUT_APPS = [
   { appId: "calendar", type: "application" },
   { appId: "clock", type: "application" },
   { appId: "browser", type: "application" },
+  { appId: "code-studio", type: "application" },
   { appId: "recycle-bin", type: "system" },
 ];
 
+/** Text and code files Code Studio opens by default (no other app handles them). */
+const CODE_STUDIO_DEFAULT_EXTENSIONS = [
+  "css", "js", "mjs", "cjs", "jsx", "ts", "tsx", "json", "webmanifest", "map",
+  "xml", "yml", "yaml", "toml", "ini", "cfg", "conf", "env", "csv", "log",
+  "scss", "sass", "less", "vue", "svelte", "sh", "bash", "ps1", "bat",
+  "py", "rb", "php", "java", "kt", "c", "h", "cpp", "hpp", "cs", "go", "rs", "swift", "sql", "lua", "pl", "r",
+];
+/** sessionStorage flag: after "Use BrowserOS here" in a paused tab, ask for the session right away. */
+const TAKEOVER_FLAG = "browseros:takeover";
+/** Start-up stages shown on the start-up screen; the first (loading the code) is done once this module runs. */
+const BOOT_STAGES = 5;
+/** Files other apps open by default; Code Studio is offered under "Open with". */
+const CODE_STUDIO_ALTERNATIVE_EXTENSIONS = ["html", "htm", "svg", "md", "txt"];
+
 async function boot() {
+  bootScreen.setStageCount(BOOT_STAGES);
+  bootScreen.report(1, "Checking for other BrowserOS tabs");
+  if (sessionGuard.isNestedInItself()) {
+    bootScreen.remove();
+    bootScreen.setState("failed");
+    showSystemScreen({
+      title: "BrowserOS is already running",
+      message: "This page is BrowserOS itself, opened inside BrowserOS. It isn't started here, because two copies would share and overwrite the same files and settings.",
+    });
+    return;
+  }
+  await claimSession();
+  try {
+    await startDesktop();
+  } catch (error) {
+    console.error("[BrowserOS] start-up failed:", error);
+    bootScreen.remove();
+    bootScreen.setState("failed");
+    showStartupFailure(error);
+  }
+}
+
+/** @returns {Promise<void>} */
+async function startDesktop() {
+  bootScreen.report(1, "Loading settings");
   settingsService.init();
   themeManager.init();
+  bootScreen.report(2, "Opening your files");
 
   const root = document.getElementById("app-root");
   const desktop = new Desktop(root);
@@ -128,16 +186,25 @@ async function boot() {
   appManager.register({
     id: "about",
     name: "About BrowserOS",
-    icon: "\u2726",
-    description: "Version and system information",
+    icon: "icon:browseros",
+    description: "Version, system information, applications, and credits",
     category: "System",
     singleInstance: true,
     loader: () => import("./apps/about/main.js"),
   });
   appManager.register({
+    id: "welcome",
+    name: "Welcome",
+    icon: "icon:compass",
+    description: "Get started: appearance, a short tour, and sample files",
+    category: "System",
+    singleInstance: true,
+    loader: () => import("./apps/welcome/main.js"),
+  });
+  appManager.register({
     id: "notes",
     name: "Notes",
-    icon: "\u270e",
+    icon: "icon:notes",
     description: "Rich-text notes and plain-text documents",
     category: "Productivity",
     singleInstance: true,
@@ -146,7 +213,7 @@ async function boot() {
   appManager.register({
     id: "calendar",
     name: "Calendar",
-    icon: "\u25a3",
+    icon: "icon:calendar",
     description: "Events, recurring schedules, and reminders",
     category: "Productivity",
     singleInstance: true,
@@ -155,7 +222,7 @@ async function boot() {
   appManager.register({
     id: "calculator",
     name: "Calculator",
-    icon: "\u25a6",
+    icon: "icon:calculator",
     description: "Standard and scientific calculator with history",
     category: "Utilities",
     singleInstance: false,
@@ -173,7 +240,7 @@ async function boot() {
   appManager.register({
     id: "image-viewer",
     name: "Image Viewer",
-    icon: "\u25a7",
+    icon: "icon:image",
     description: "View PNG, JPEG, WebP, GIF, and SVG images",
     category: "Utilities",
     singleInstance: false,
@@ -182,7 +249,7 @@ async function boot() {
   appManager.register({
     id: "file-explorer",
     name: "File Explorer",
-    icon: "\u25a4",
+    icon: "icon:folder",
     description: "Browse and manage files and folders",
     category: "System",
     singleInstance: false,
@@ -191,7 +258,7 @@ async function boot() {
   appManager.register({
     id: "terminal",
     name: "Terminal",
-    icon: "\u276f",
+    icon: "icon:terminal",
     description: "Command-line access to the file system",
     category: "System",
     singleInstance: false,
@@ -200,7 +267,7 @@ async function boot() {
   appManager.register({
     id: "settings",
     name: "Settings",
-    icon: "\u2699",
+    icon: "icon:gear",
     description: "Appearance, desktop, and system preferences",
     category: "System",
     singleInstance: true,
@@ -209,7 +276,7 @@ async function boot() {
   appManager.register({
     id: "recycle-bin",
     name: "Recycle Bin",
-    icon: "\u267b",
+    icon: "icon:trash",
     description: "Items moved to Trash",
     category: "System",
     singleInstance: true,
@@ -234,6 +301,38 @@ async function boot() {
     loader: () => import("./apps/browser/main.js"),
   });
   appManager.register({
+    id: "code-studio",
+    name: "Code Studio",
+    icon: "icon:code",
+    description: "Code editor with projects, live preview, search, and diagnostics",
+    category: "Development",
+    singleInstance: true,
+    loader: () => import("./apps/code-studio/main.js"),
+  });
+  // Additional Code Studio windows (File > New window) and pop-out
+  // previews belong to the Code Studio application in the taskbar and
+  // Task Manager, but aren't separate entries in the Start Menu.
+  appManager.register({
+    id: "code-studio-window",
+    name: "Code Studio",
+    icon: "icon:code",
+    description: "Another Code Studio window",
+    category: "Development",
+    dynamic: true,
+    groupId: "code-studio",
+    loader: () => import("./apps/code-studio/main.js"),
+  });
+  appManager.register({
+    id: "code-studio-preview",
+    name: "Code Studio Preview",
+    icon: "icon:play",
+    description: "Live preview opened from Code Studio",
+    category: "Development",
+    dynamic: true,
+    groupId: "code-studio",
+    loader: () => import("./apps/code-studio/previewWindow.js"),
+  });
+  appManager.register({
     id: "downloads",
     name: "Downloads",
     icon: "icon:download",
@@ -243,7 +342,13 @@ async function boot() {
     loader: () => import("./apps/downloads/main.js"),
   });
 
+  // Code Studio handles source files; existing defaults (Browser for
+  // HTML, Notes for text, Image Viewer for SVG) stay first.
+  fileAssociations.register({ appId: "code-studio", label: "Code Studio", extensions: CODE_STUDIO_DEFAULT_EXTENSIONS, description: "Source file" });
+  fileAssociations.register({ appId: "code-studio", label: "Code Studio", extensions: CODE_STUDIO_ALTERNATIVE_EXTENSIONS, description: "Source file" });
+
   await vfs.init();
+  bootScreen.report(3, "Loading the desktop");
 
   // Data for services that run whether or not their app windows are open.
   calendarService.init({ vfs, appManager });
@@ -363,11 +468,16 @@ async function boot() {
     appManager,
     vfs,
     recentFilesService,
+    powerActions: {
+      restart: () => restartBrowserOS({ appManager }),
+      shutDown: () => shutDownBrowserOS({ appManager }),
+    },
   });
   startMenuManager.init();
 
   const trayManager = new TrayManager({ trayEl: desktop.getTrayElement(), appManager, calendarService });
   trayManager.init();
+  bootScreen.report(4, "Starting services");
 
   // Application shortcuts (gated by keyboard.appShortcuts). Launch
   // errors are logged rather than thrown into the key handler.
@@ -400,10 +510,219 @@ async function boot() {
 
   await serviceManager.startAll();
 
-  // First-run sample images, created in the background.
-  seedSamplePictures(vfs);
+  watchStorageConnection();
+  handOverSessionOnRequest({ appManager });
 
-  await appManager.launch("about");
+  // The Welcome tour opens on a new installation, and again at the next
+  // start if it was neither finished nor skipped.
+  if (onboarding.shouldShowAtStart({ newInstallation: vfs.isNewInstallation() })) {
+    try {
+      await appManager.launch("welcome", { firstRun: true });
+    } catch (error) {
+      console.error("[BrowserOS] the Welcome tour couldn't open:", error);
+    }
+  }
+  bootScreen.finish();
+}
+
+/**
+ * Wait until this tab holds the BrowserOS session (see sessionGuard.js),
+ * showing a notice while another tab has it.
+ * @returns {Promise<void>}
+ */
+async function claimSession() {
+  let screen = null;
+  let autoTakeover = false;
+  try {
+    autoTakeover = window.sessionStorage.getItem(TAKEOVER_FLAG) === "1";
+    window.sessionStorage.removeItem(TAKEOVER_FLAG);
+  } catch {
+    autoTakeover = false;
+  }
+  await sessionGuard.claim({
+    onWaiting: ({ requestTakeover, onStatus }) => {
+      bootScreen.remove();
+      bootScreen.setState("waiting");
+      const useHere = { label: "Use BrowserOS here", primary: true, onClick: () => requestTakeover() };
+      screen = showSystemScreen({
+        title: "BrowserOS is open in another tab",
+        message: "BrowserOS runs in one tab at a time, so that two copies never overwrite each other's files and settings. Close the other tab, or use BrowserOS here instead.",
+        actions: [useHere],
+      });
+      onStatus((status) => {
+        if (status === "requested") screen.update({ status: "Waiting for the other tab to save and pause BrowserOS\u2026", actions: [] });
+        if (status === "waiting-unsaved") screen.update({ status: "The other tab has unsaved changes. Switch to it to save them, or to confirm that this tab can continue.", actions: [] });
+        if (status === "denied") screen.update({ status: "The other tab is still being used.", actions: [useHere] });
+      });
+      if (autoTakeover) requestTakeover();
+    },
+  });
+  screen?.remove();
+}
+
+/**
+ * In the active tab: hand the session to another tab that asks for it,
+ * after asking the user if any application has unsaved work.
+ * @param {{appManager: AppManager}} deps
+ * @returns {void}
+ */
+function handOverSessionOnRequest({ appManager }) {
+  let asking = false;
+  sessionGuard.onTakeoverRequest(async (request) => {
+    if (asking) return;
+    const unsaved = [];
+    for (const app of appManager.getRunningApplications()) {
+      for (const warning of appManager.getCloseWarnings(app.appId)) unsaved.push(`${app.name}: ${warning}`);
+    }
+    if (unsaved.length > 0) {
+      request.respondWaiting("unsaved");
+      asking = true;
+      const proceed = await showConfirmDialog({
+        title: "BrowserOS was opened in another tab",
+        message: `Switch to the other tab? Unsaved work here will be lost: ${unsaved.slice(0, 3).join(" \u00b7 ")}`,
+        confirmLabel: "Switch to the other tab",
+        cancelLabel: "Keep using this tab",
+        destructive: true,
+      });
+      asking = false;
+      if (!proceed) {
+        request.deny();
+        return;
+      }
+    }
+    // Save what is pending, stop timers and services, then let go.
+    settingsService.flush();
+    historyService.flush();
+    serviceManager.stopAll();
+    sessionGuard.release();
+    showSystemScreen({
+      title: "BrowserOS is open in another tab",
+      message: "BrowserOS moved to another tab. Everything was saved there; this tab is paused so the two never overwrite each other.",
+      actions: [
+        {
+          label: "Use BrowserOS here",
+          primary: true,
+          onClick: () => {
+            try {
+              window.sessionStorage.setItem(TAKEOVER_FLAG, "1");
+            } catch {
+              /* without the flag, the next start shows the button again */
+            }
+            window.location.reload();
+          },
+        },
+      ],
+    });
+  });
+}
+
+/**
+ * If the browser closes the file-system database underneath BrowserOS
+ * (site data cleared, or a newer version upgrading it), stop and offer
+ * a reload rather than failing on every later file operation.
+ * @returns {void}
+ */
+function watchStorageConnection() {
+  eventBus.on("vfs:connectionClosed", ({ reason }) => {
+    showSystemScreen({
+      title: reason === "versionchange" ? "BrowserOS was updated" : "BrowserOS lost access to its storage",
+      message:
+        reason === "versionchange"
+          ? "A newer version of BrowserOS opened in another tab and needs to update the file system. Reload to continue with the new version."
+          : "The browser closed BrowserOS's file storage (for example because site data was cleared). Reload to continue.",
+      actions: [{ label: "Reload", primary: true, onClick: () => window.location.reload() }],
+    });
+  });
+}
+
+/**
+ * @param {*} error
+ * @returns {void}
+ */
+function showStartupFailure(error) {
+  const code = error?.code;
+  let message = "Something went wrong while BrowserOS was starting. Your files have not been changed.";
+  if (code === "STORAGE_BLOCKED") {
+    message = "Another tab is holding BrowserOS's file storage open with an older version. Close other BrowserOS tabs, then try again.";
+  } else if (code === "STORAGE_UNAVAILABLE" || code === "STORAGE_ERROR") {
+    message =
+      "BrowserOS keeps files in the browser's storage (IndexedDB), and it couldn't be opened. This happens when site data is blocked for this address, in some private browsing modes, or when browser storage is full or damaged.";
+  }
+  showSystemScreen({
+    title: "BrowserOS couldn't start",
+    message,
+    detail: error?.message ? String(error.message) : String(error),
+    actions: [{ label: "Try again", primary: true, onClick: () => window.location.reload() }],
+  });
+}
+
+/**
+ * Start menu › Restart: let applications finish (asking first if any
+ * has unsaved work), save what is pending, and load BrowserOS again.
+ * @param {{appManager: AppManager}} deps
+ * @returns {Promise<void>}
+ */
+async function restartBrowserOS({ appManager }) {
+  if (!(await confirmEndingSession(appManager, "Restart"))) return;
+  endSession(appManager);
+  window.location.reload();
+}
+
+/**
+ * Start menu › Shut down: like Restart, but BrowserOS stays stopped
+ * (and gives up the session, so another tab can use it) until the user
+ * starts it again.
+ * @param {{appManager: AppManager}} deps
+ * @returns {Promise<void>}
+ */
+async function shutDownBrowserOS({ appManager }) {
+  if (!(await confirmEndingSession(appManager, "Shut down"))) return;
+  endSession(appManager);
+  sessionGuard.release();
+  showSystemScreen({
+    title: "BrowserOS has shut down",
+    message: "Everything was saved in this browser. You can close this tab, or start BrowserOS again.",
+    actions: [{ label: "Start BrowserOS", primary: true, onClick: () => window.location.reload() }],
+  });
+}
+
+/**
+ * @param {AppManager} appManager
+ * @param {string} action - "Restart" or "Shut down".
+ * @returns {Promise<boolean>} Whether to go ahead.
+ */
+async function confirmEndingSession(appManager, action) {
+  const unsaved = [];
+  for (const app of appManager.getRunningApplications()) {
+    for (const warning of appManager.getCloseWarnings(app.appId)) unsaved.push(`${app.name}: ${warning}`);
+  }
+  if (unsaved.length === 0) return true;
+  return showConfirmDialog({
+    title: `${action} with unsaved work?`,
+    message: `Unsaved work will be lost: ${unsaved.slice(0, 3).join(" \u00b7 ")}`,
+    confirmLabel: `${action} anyway`,
+    cancelLabel: "Cancel",
+    destructive: true,
+  });
+}
+
+/**
+ * End every application, save pending settings and history, and stop
+ * the background services.
+ * @param {AppManager} appManager
+ * @returns {void}
+ */
+function endSession(appManager) {
+  for (const app of appManager.getRunningApplications()) {
+    try {
+      appManager.endApplication(app.appId);
+    } catch (error) {
+      console.error(`[BrowserOS] "${app.appId}" didn't close cleanly:`, error);
+    }
+  }
+  settingsService.flush();
+  historyService.flush();
+  serviceManager.stopAll();
 }
 
 if (document.readyState === "loading") {

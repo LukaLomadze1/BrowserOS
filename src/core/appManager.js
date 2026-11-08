@@ -517,6 +517,8 @@ class AppManager {
   async _createInstance(descriptor, options) {
     const id = descriptor.id;
     if (!descriptor.AppClass) {
+      // The module is fetched on first launch; the shell shows that it's loading.
+      eventBus.emit("app:loading", { appId: id });
       try {
         const module = await descriptor.loader();
         if (typeof module?.default !== "function") throw new Error("The application module has no default export");
@@ -524,6 +526,8 @@ class AppManager {
       } catch (error) {
         this._reportCrash(descriptor, "load", error);
         throw error;
+      } finally {
+        eventBus.emit("app:loaded", { appId: id });
       }
     }
 
@@ -567,8 +571,11 @@ class AppManager {
       minimizable: built.minimizable,
       maximizable: built.maximizable,
       closable: built.closable,
+      center: built.center === true,
       content: built.element,
       onDestroy: () => this._handleWindowDestroyed(id, windowId),
+      // Applications may veto a normal close (e.g. to ask about unsaved changes).
+      onBeforeClose: typeof instance.onBeforeClose === "function" ? () => instance.onBeforeClose() : undefined,
     });
 
     instance.windowId = windowId;

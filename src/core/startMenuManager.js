@@ -59,6 +59,7 @@ class StartMenuManager {
    * @param {import("./appManager.js").AppManager} config.appManager
    * @param {import("./vfs/virtualFileSystem.js").vfs} config.vfs - Used to search files/folders and to look up a recent file's current entry before opening it.
    * @param {import("./recentFilesService.js").RecentFilesService} config.recentFilesService
+   * @param {{restart: () => void, shutDown: () => void}} [config.powerActions] - Behind the Restart and Shut down buttons.
    */
   constructor(config) {
     this._startButtonEl = config.startButtonEl;
@@ -66,9 +67,12 @@ class StartMenuManager {
     this._vfs = config.vfs;
     this._recentFilesService = config.recentFilesService;
 
+    const power = config.powerActions ?? null;
     this._view = new StartMenuView({
       onSearchInput: (query) => this._handleSearchInput(query),
       onKeyDown: (e) => this._handleMenuKeyDown(e),
+      onRestart: power ? () => this._runPowerAction(power.restart) : undefined,
+      onShutDown: power ? () => this._runPowerAction(power.shutDown) : undefined,
     });
 
     /** @type {Readonly<Record<string, *>>} */
@@ -145,6 +149,18 @@ class StartMenuManager {
     eventBus.emit("startmenu:opened", {});
 
     this._recentFilesService.reconcile().then(() => this._renderRecentFiles());
+  }
+
+  /**
+   * Close the menu, then run a Restart or Shut down action.
+   * @param {() => (void|Promise<void>)} action
+   * @returns {void}
+   */
+  _runPowerAction(action) {
+    this.close({ restoreFocus: false });
+    Promise.resolve()
+      .then(action)
+      .catch((error) => console.error("[StartMenu] power action failed:", error));
   }
 
   /**
@@ -370,7 +386,7 @@ class StartMenuManager {
       kind: "setting",
       key: `setting:${entry.page}:${entry.anchor}`,
       name: entry.label,
-      icon: "\u2699",
+      icon: "icon:gear",
       detail: `Settings \u203a ${entry.pageLabel}`,
       score: entry.score,
       activate: () => this._openSettings(entry.page, entry.anchor),
@@ -409,7 +425,7 @@ class StartMenuManager {
         kind: isFolder ? "folder" : "file",
         key: `vfs:${entry.id}`,
         name: entry.name,
-        icon: isFolder ? "\u25a4" : "\u25a2",
+        icon: isFolder ? "icon:folder" : "icon:file",
         detail: entry.path,
         score: value,
         activate: () => this._openSearchEntry(entry.path),

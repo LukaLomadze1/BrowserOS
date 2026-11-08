@@ -5,9 +5,15 @@
  * and forwards raw DOM facts upward (just one: the input's keydown)
  * — TerminalManager is the only place that decides what Enter, Tab,
  * and the arrow keys mean.
+ *
+ * The output keeps the most recent SCROLLBACK_LIMIT blocks (a command's
+ * output is one block), so a long session can't grow the page forever.
  */
 
 import { createElement, clearElement } from "../../utils/dom.js";
+
+/** Output blocks kept on screen; older ones are dropped, like a terminal's scrollback limit. */
+export const SCROLLBACK_LIMIT = 2000;
 
 class TerminalView {
   /**
@@ -70,6 +76,7 @@ class TerminalView {
       text: line.text,
     });
     this._outputEl.append(lineEl);
+    while (this._outputEl.childElementCount > SCROLLBACK_LIMIT) this._outputEl.firstElementChild.remove();
     this._scrollToBottom();
   }
 

@@ -6,8 +6,7 @@
  *
  * Name conflicts are resolved by generating a safe alternate name
  * (reusing the exact same nameGenerator used for "New Folder (2)"),
- * rather than showing a conflict dialog — the spec offered either,
- * and silent safe-renaming matches how real desktop OSes behave on
+ * rather than showing a conflict dialog: silent safe-renaming matches how real desktop OSes behave on
  * paste and never leaves the user staring at a blocking prompt for a
  * multi-item paste.
  */

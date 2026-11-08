@@ -12,8 +12,8 @@
  * @param {string|null} extension - e.g. "txt", or null for folders.
  * @param {string[]} existingNames - Sibling names already present, any case.
  * @returns {string} `baseName` (+ extension) if free, otherwise
- *   "baseName (2)", "baseName (3)", ... — matching the spec's example
- *   sequence exactly (no "(1)"; the bare name IS the first one).
+ *   "baseName (2)", "baseName (3)", ... (no "(1)"; the bare name is
+ *   the first one).
  */
 export function generateDefaultName(baseName, extension, existingNames) {
   const existingLower = new Set(existingNames.map((name) => name.toLowerCase()));

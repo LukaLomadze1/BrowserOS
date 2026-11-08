@@ -91,7 +91,7 @@ export default class NotesApp extends Application {
     return {
       element: this._root,
       title: "Notes",
-      icon: "\u270e",
+      icon: "icon:notes",
       width: 920,
       height: 620,
       minWidth: 420,

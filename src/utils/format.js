@@ -1,7 +1,7 @@
 /**
  * @file Small presentation-formatting helpers shared by anything that
- * displays VFS metadata (Properties dialog, Folder Viewer, and later
- * the real File Explorer) — kept in one place so "12 KB" and date
+ * displays VFS metadata (Properties dialog, File Explorer, Recycle
+ * Bin) — kept in one place so "12 KB" and date
  * formatting never drift between them.
  */
 
@@ -13,6 +13,7 @@ const UNITS = ["bytes", "KB", "MB", "GB"];
  */
 export function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 bytes";
+  if (bytes === 1) return "1 byte";
 
   let value = bytes;
   let unitIndex = 0;

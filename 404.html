@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-base="/">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Page not found · BrowserOS</title>
+  <link rel="icon" href="/assets/brand/browseros-icon.svg" type="image/svg+xml" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-a: #0a0c12;
+      --bg-b: #131726;
+      --text: #eef1f7;
+      --muted: #97a0b3;
+      --accent: #7c6cf6;
+      --on-accent: #0a0c12;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        color-scheme: light;
+        --bg-a: #eef1f7;
+        --bg-b: #d8deea;
+        --text: #151a26;
+        --muted: #4a5366;
+        --accent: #5b48d9;
+        --on-accent: #ffffff;
+      }
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      box-sizing: border-box;
+      background: linear-gradient(160deg, var(--bg-b), var(--bg-a) 70%);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      text-align: center;
+    }
+
+    main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      max-width: 420px;
+    }
+
+    svg {
+      width: 56px;
+      height: 56px;
+    }
+
+    .orb {
+      fill: var(--accent);
+    }
+
+    h1 {
+      margin: 8px 0 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    a {
+      margin-top: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: var(--on-accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    a:focus-visible {
+      outline: 2px solid var(--text);
+      outline-offset: 3px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M39 22.2V16a8 8 0 0 0-8-8H13a8 8 0 0 0-8 8v14a8 8 0 0 0 8 8h10.2" />
+      <path d="M5 17h34" stroke-linecap="butt" />
+      <circle class="orb" cx="37" cy="36" r="8.5" stroke="none" />
+    </svg>
+    <h1>This page doesn't exist</h1>
+    <p>BrowserOS runs from a single page. Everything in it, including your files, is reached from the desktop.</p>
+    <a href="/">Open BrowserOS</a>
+  </main>
+</body>
+</html>

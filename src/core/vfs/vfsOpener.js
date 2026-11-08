@@ -38,6 +38,12 @@ import { formatBytes, formatDate } from "../../utils/format.js";
  */
 export async function openVfsEntry(entry, { appManager, recentFilesService, appId }) {
   if (entry.type === "folder") {
+    // A folder opens in File Explorer unless an application that works
+    // on folders (e.g. Code Studio opening it as a project) is named.
+    if (appId && appId !== "file-explorer" && appManager.isRegistered(appId)) {
+      await appManager.launch(appId, { path: entry.path });
+      return;
+    }
     await openInExplorer(entry.path, appManager);
     return;
   }
@@ -79,7 +85,7 @@ async function openInExplorer(path, appManager) {
     appManager.register({
       id: appId,
       name: getBaseName(path),
-      icon: "\u25a4",
+      icon: "icon:folder",
       singleInstance: true,
       dynamic: true,
       loader: () => import("../../apps/file-explorer/main.js"),

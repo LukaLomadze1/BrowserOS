@@ -98,6 +98,7 @@ class WindowManager {
    * @param {number} [config.height=420]
    * @param {number} [config.x] - Omit to auto-cascade.
    * @param {number} [config.y] - Omit to auto-cascade.
+   * @param {boolean} [config.center] - Without x and y: center the window on the desktop instead of cascading.
    * @param {number} [config.minWidth]
    * @param {number} [config.minHeight]
    * @param {boolean} [config.resizable=true]
@@ -105,6 +106,7 @@ class WindowManager {
    * @param {boolean} [config.maximizable=true]
    * @param {boolean} [config.closable=true]
    * @param {() => void} [config.onDestroy] - Called once, when the window is fully removed, so the app can clean up its own timers/listeners.
+   * @param {() => (boolean|Promise<boolean>)} [config.onBeforeClose] - Asked before a normal close (close button, keyboard, taskbar); returning false keeps the window open, e.g. after the user cancels a "save changes?" prompt. destroyWindow() never asks.
    * @param {string} [config.appId] - Application the window belongs to; passed on in "window:created" so the taskbar can group and label it.
    * @returns {string} The window id.
    */
@@ -150,7 +152,7 @@ class WindowManager {
       }
     );
 
-    this._windows.set(config.id, { view, config, onDestroy: config.onDestroy ?? null });
+    this._windows.set(config.id, { view, config, onDestroy: config.onDestroy ?? null, onBeforeClose: config.onBeforeClose ?? null, closing: false });
     this._container.append(view.getElement());
     view.playOpenAnimation();
     this._createdCount += 1;
@@ -162,14 +164,33 @@ class WindowManager {
   }
 
   /**
-   * Close a window: plays the exit animation, then destroys it.
+   * Close a window: asks its onBeforeClose hook (if any), then plays the
+   * exit animation and destroys it.
    * @param {string} id
    * @returns {void}
    */
   closeWindow(id) {
     const entry = this._windows.get(id);
-    if (!entry) return;
+    if (!entry || entry.closing) return;
 
+    if (entry.onBeforeClose) {
+      entry.closing = true;
+      Promise.resolve()
+        .then(() => entry.onBeforeClose())
+        .catch((error) => {
+          console.error(`[WindowManager] onBeforeClose for "${id}" failed:`, error);
+          return true;
+        })
+        .then((allowed) => {
+          entry.closing = false;
+          if (allowed === false || !this._windows.has(id)) return;
+          entry.closing = true;
+          entry.view.playCloseAnimation(() => this.destroyWindow(id));
+        });
+      return;
+    }
+
+    entry.closing = true;
     entry.view.playCloseAnimation(() => {
       this.destroyWindow(id);
     });
@@ -407,6 +428,12 @@ class WindowManager {
       return { x: config.x, y: config.y };
     }
     const bounds = this._container.getBoundingClientRect();
+    if (config.center) {
+      return {
+        x: Math.max(0, Math.round((bounds.width - width) / 2)),
+        y: Math.max(0, Math.round((bounds.height - height) / 2)),
+      };
+    }
     const step = this._createdCount % CASCADE_WRAP_COUNT;
     const x = Math.min(
       CASCADE_ORIGIN_X + step * CASCADE_STEP_X,

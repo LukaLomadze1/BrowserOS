@@ -1,15 +1,18 @@
 /**
- * @file ValidationService — every rule from the spec's Validation
- * section, as small pure functions. Each takes already-fetched data
- * (entries, sibling lists) rather than reaching into storage itself,
- * so VirtualFileSystem stays the only place that decides *when* to
- * validate, while this file stays the only place that decides *what
- * counts as valid*.
+ * @file ValidationService — the file system's rules, as small pure
+ * functions. Each takes already-fetched data (entries, sibling lists)
+ * rather than reaching into storage itself, so VirtualFileSystem stays
+ * the only place that decides *when* to validate, while this file
+ * stays the only place that decides *what counts as valid*.
  */
 
 import { VFSError } from "./vfsError.js";
 
 const INVALID_NAME_CHARS = /[/\\:*?"<>|]/;
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
+
+/** Longest allowed file or folder name, in characters. */
+export const MAX_NAME_LENGTH = 255;
 
 /**
  * @param {string} name
@@ -23,14 +26,20 @@ export function validateName(name) {
   if (name === "." || name === "..") {
     throw new VFSError("INVALID_NAME", `"${name}" is not a valid name`);
   }
+  if (CONTROL_CHARS.test(name)) {
+    throw new VFSError("INVALID_NAME", "Names can't contain line breaks, tabs, or other control characters");
+  }
   if (INVALID_NAME_CHARS.test(name)) {
-    throw new VFSError("INVALID_NAME", `Name "${name}" contains invalid characters`);
+    throw new VFSError("INVALID_NAME", `Name "${name}" contains invalid characters (/ \\ : * ? " < > |)`);
+  }
+  if (name.length > MAX_NAME_LENGTH) {
+    throw new VFSError("INVALID_NAME", `Names can be at most ${MAX_NAME_LENGTH} characters long`);
   }
 }
 
 /**
  * Case-insensitive duplicate check, matching how the default folder
- * names (and most real desktop OS file systems) treat uniqueness.
+ * names (and most desktop file systems) treat uniqueness.
  * @param {object[]} siblings
  * @param {string} name
  * @param {string|null} [excludeId] - Pass the entry's own id when renaming/moving-in-place, so it doesn't collide with itself.

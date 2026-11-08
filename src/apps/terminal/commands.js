@@ -13,6 +13,28 @@
  */
 
 import { getBaseName, getParentPath } from "../../core/vfs/pathResolver.js";
+import { TRASH_PATH, isTrashPath } from "../../core/vfs/virtualFileSystem.js";
+import { BROWSEROS_VERSION } from "../../core/version.js";
+
+/**
+ * Resolve a command argument naming an item in Trash: a path (relative
+ * to the current directory or absolute) inside /Trash, or just the
+ * item's name in /Trash.
+ * @param {object} ctx
+ * @param {string} arg
+ * @param {string} command - For error messages.
+ * @param {{nested?: boolean}} [options] - nested: also accept items inside folders in Trash.
+ * @returns {Promise<string>}
+ */
+async function trashItemPath(ctx, arg, command, { nested = false } = {}) {
+  const resolved = await ctx.vfs.resolvePath(arg, ctx.cwd);
+  const candidates = isTrashPath(resolved) ? [resolved] : [`${TRASH_PATH}/${arg}`];
+  for (const candidate of candidates) {
+    const inTrash = nested ? isTrashPath(candidate) && candidate !== TRASH_PATH : getParentPath(candidate) === TRASH_PATH;
+    if (inTrash && (await ctx.vfs.exists(candidate))) return candidate;
+  }
+  throw new Error(`${command}: ${arg}: not found in Trash`);
+}
 
 /**
  * Split a raw command line into tokens, honoring single- and
@@ -240,8 +262,43 @@ export function createCommandRegistry() {
   register("rm", "Move a file or folder to Trash", async (args, ctx) => {
     if (args.length === 0) throw new Error("rm: missing operand");
     for (const path of args) {
+      const resolved = await ctx.vfs.resolvePath(path, ctx.cwd);
+      if (isTrashPath(resolved) && resolved !== TRASH_PATH) {
+        throw new Error(`rm: ${path} is already in Trash (use purge to delete it permanently)`);
+      }
       await ctx.vfs.delete(path, ctx.cwd);
     }
+  });
+
+  register("restore", "Restore items from Trash to where they were deleted from", async (args, ctx) => {
+    if (args.length === 0) throw new Error("restore: missing operand (an item in /Trash)");
+    for (const arg of args) {
+      const restored = await ctx.vfs.restore(await trashItemPath(ctx, arg, "restore"));
+      ctx.print(`Restored ${restored.path}`);
+    }
+  });
+
+  register("purge", "Permanently delete items in Trash", async (args, ctx) => {
+    if (args.length === 0) throw new Error("purge: missing operand (an item in /Trash)");
+    for (const arg of args) {
+      const path = await trashItemPath(ctx, arg, "purge", { nested: true });
+      await ctx.vfs.deletePermanently(path);
+      ctx.print(`Permanently deleted ${path}`);
+    }
+  });
+
+  register("emptytrash", "Permanently delete everything in Trash (emptytrash --yes)", async (args, ctx) => {
+    const items = await ctx.vfs.list(TRASH_PATH);
+    if (items.length === 0) {
+      ctx.print("Trash is already empty.");
+      return;
+    }
+    if (!args.includes("--yes")) {
+      ctx.print(`This permanently deletes ${items.length} ${items.length === 1 ? "item" : "items"} in Trash. Run "emptytrash --yes" to confirm.`);
+      return;
+    }
+    const { items: removed } = await ctx.vfs.emptyTrash();
+    ctx.print(`Permanently deleted ${removed} ${removed === 1 ? "item" : "items"} from Trash.`);
   });
 
   register("tree", "Recursively print a directory tree", async (args, ctx) => {
@@ -293,7 +350,7 @@ export function createCommandRegistry() {
   });
 
   register("version", "Print the BrowserOS version", (args, ctx) => {
-    ctx.print("BrowserOS 0.1 \u2014 Terminal 1.0");
+    ctx.print(`BrowserOS ${BROWSEROS_VERSION} \u2014 Terminal 1.0`);
   });
 
   register("explorer", "Open File Explorer at a path (defaults to the current directory)", async (args, ctx) => {
@@ -302,10 +359,23 @@ export function createCommandRegistry() {
     await ctx.openEntry(info);
   });
 
-  register("open", "Open a file in its registered application", async (args, ctx) => {
-    if (args.length === 0) throw new Error("open: missing operand");
-    const info = await ctx.vfs.getInfo(args[0], ctx.cwd);
-    await ctx.openEntry(info);
+  register("open", "Open a file in its registered application (open --with <app-id> <path> picks the app)", async (args, ctx) => {
+    let appId;
+    const rest = [...args];
+    const withIndex = rest.findIndex((arg) => arg === "--with" || arg === "-w");
+    if (withIndex !== -1) {
+      appId = rest[withIndex + 1];
+      if (!appId) throw new Error("open: --with needs an application id (for example: open --with code-studio index.html)");
+      rest.splice(withIndex, 2);
+    }
+    if (rest.length === 0) throw new Error("open: missing operand");
+    const info = await ctx.vfs.getInfo(rest[0], ctx.cwd);
+    await ctx.openEntry(info, appId);
+  });
+
+  register("code", "Open a file, or a folder as a project, in Code Studio (defaults to the current directory)", async (args, ctx) => {
+    const info = await ctx.vfs.getInfo(args[0] ?? ".", ctx.cwd);
+    await ctx.openEntry(info, "code-studio");
   });
 
   return commands;

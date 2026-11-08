@@ -3,20 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="BrowserOS: a desktop environment with windows, a file system, and applications, running entirely in the browser." />
+  <meta name="color-scheme" content="dark light" />
   <title>BrowserOS</title>
+
+  <link rel="icon" href="assets/brand/browseros-icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="assets/brand/browseros-icon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="assets/brand/browseros-icon-180.png" />
 
   <!-- Render-blocking on purpose: picks the stored theme before first paint. -->
   <script src="src/core/settings/themePreboot.js"></script>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap"
-    rel="stylesheet"
-  />
+  <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/space-grotesk-latin.woff2" as="font" type="font/woff2" crossorigin />
 
+  <link rel="stylesheet" href="styles/fonts.css" />
   <link rel="stylesheet" href="styles/variables.css" />
   <link rel="stylesheet" href="styles/main.css" />
+  <link rel="stylesheet" href="styles/boot.css" />
+  <link rel="stylesheet" href="styles/controls.css" />
   <link rel="stylesheet" href="styles/desktop.css" />
   <link rel="stylesheet" href="styles/wallpapers.css" />
   <link rel="stylesheet" href="styles/desktopIcon.css" />
@@ -27,10 +32,32 @@
   <link rel="stylesheet" href="styles/notifications.css" />
   <link rel="stylesheet" href="styles/shell.css" />
   <link rel="stylesheet" href="styles/downloads.css" />
+  <link rel="stylesheet" href="styles/systemScreen.css" />
 </head>
-<body>
+<body data-boot-state="starting">
   <div id="app-root"></div>
 
+  <!-- Start-up screen: shown until the desktop is ready (src/core/system/bootScreen.js). -->
+  <div id="boot-screen" class="boot-screen">
+    <div class="boot-screen__brand">
+      <svg class="boot-screen__mark" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M39 22.2V16a8 8 0 0 0-8-8H13a8 8 0 0 0-8 8v14a8 8 0 0 0 8 8h10.2" />
+        <path d="M5 17h34" stroke-linecap="butt" />
+        <circle cx="37" cy="36" r="8.5" fill="currentColor" stroke="none" />
+      </svg>
+      <p class="boot-screen__name">BrowserOS</p>
+    </div>
+    <div class="boot-screen__progress">
+      <div class="boot-screen__track" role="progressbar" aria-label="Starting BrowserOS" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="boot-screen__bar"></div>
+      </div>
+      <p class="boot-screen__status" aria-live="polite">Loading BrowserOS</p>
+    </div>
+    <noscript><p class="boot-screen__status">BrowserOS needs JavaScript to run.</p></noscript>
+  </div>
+
+  <!-- Shows a message on the start-up screen if the code below can't be downloaded. -->
+  <script src="src/core/system/bootFallback.js"></script>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

@@ -14,7 +14,7 @@
  *   secondary     → --color-accent-secondary
  *   onAccent      → --color-text-on-accent
  *
- * The remaining accent tokens (gradient, focus ring, selection tint,
+ * The remaining accent tokens (focus ring, selection tint,
  * hover tint, wallpaper glows, terminal prompt) are derived from
  * those four in styles/variables.css, so a preset can never produce a
  * half-applied or mismatched combination.
@@ -29,7 +29,7 @@
  * @property {string} primary
  * @property {string} primaryStrong
  * @property {string} secondary
- * @property {string} onAccent - Text color placed on top of the accent gradient.
+ * @property {string} onAccent - Text color placed on top of an accent fill.
  */
 
 /**

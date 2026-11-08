@@ -1,0 +1,104 @@
+/**
+ * Shared controls: the button and key-cap styles used by system
+ * applications (Welcome, About BrowserOS, Recycle Bin) and dialogs.
+ *
+ * One rule for emphasis across BrowserOS: the primary action is a solid
+ * accent fill, secondary actions are quiet glass, and destructive
+ * actions use the danger color. Controls never use gradients.
+ */
+
+.os-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-surface-glass-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-glass);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background var(--duration-fast) var(--ease-sharp),
+              border-color var(--duration-fast) var(--ease-sharp),
+              color var(--duration-fast) var(--ease-sharp);
+}
+
+.os-button:hover:not(:disabled) {
+  background: var(--color-surface-glass-strong);
+  border-color: var(--color-surface-glass-border-strong);
+}
+
+.os-button--primary {
+  background: var(--color-accent-primary);
+  border-color: transparent;
+  color: var(--color-text-on-accent);
+}
+
+.os-button--primary:hover:not(:disabled) {
+  background: var(--color-accent-primary-strong);
+  border-color: transparent;
+}
+
+.os-button--quiet {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-secondary);
+}
+
+.os-button--quiet:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.os-button--danger {
+  background: var(--color-danger);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+.os-button--danger:hover:not(:disabled) {
+  background: var(--color-danger);
+  filter: brightness(1.08);
+}
+
+.os-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.os-button[hidden] {
+  display: none;
+}
+
+.os-button .os-icon {
+  font-size: 16px;
+}
+
+/* Key caps for keyboard shortcuts in running text. */
+.os-kbd {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--color-surface-glass-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-glass);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+/* The BrowserOS mark (icons.js "browseros") in brand colors: the
+ * frame takes the text color, the orb the accent. */
+.brand-mark .os-icon circle {
+  fill: var(--color-accent-primary);
+}
+
+.brand-mark .os-icon {
+  stroke-width: 2;
+}

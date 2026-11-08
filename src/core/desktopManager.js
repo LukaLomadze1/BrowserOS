@@ -936,7 +936,7 @@ class DesktopManager {
         this._marqueeEl.remove();
         this._marqueeEl = null;
       }
-      // Bug #1 fix: a rectangle selection never makes any icon the
+      // A rectangle selection never makes any icon the
       // pointerdown target, so DOM focus is left wherever it already
       // was — often nowhere inside the icon grid at all. Delete's
       // keydown listener is attached to the icon-grid container and

@@ -205,6 +205,124 @@ const SHAPES = Object.freeze({
   chevronLeft: [["path", { d: "M14.5 6l-6 6 6 6" }]],
   chevronRight: [["path", { d: "M9.5 6l6 6-6 6" }]],
   close: [["path", { d: "M6.5 6.5l11 11M17.5 6.5l-11 11" }]],
+  code: [
+    ["path", { d: "M8.5 7.5L4 12l4.5 4.5" }],
+    ["path", { d: "M15.5 7.5L20 12l-4.5 4.5" }],
+    ["path", { d: "M13.4 5.5l-2.8 13" }],
+  ],
+  play: [["path", { d: "M8 5.5v13l10.5-6.5z" }]],
+  terminal: [
+    ["rect", { x: "3.5", y: "4.5", width: "17", height: "15", rx: "2" }],
+    ["path", { d: "M7.5 9.5l3 2.5-3 2.5" }],
+    ["path", { d: "M12.5 15h4" }],
+  ],
+  files: [
+    ["path", { d: "M8.5 3.5h6.2l4.3 4.3v9.7a1.5 1.5 0 0 1-1.5 1.5h-9a1.5 1.5 0 0 1-1.5-1.5V5a1.5 1.5 0 0 1 1.5-1.5z" }],
+    ["path", { d: "M14.5 3.5v4.5H19" }],
+    ["path", { d: "M5 7v12.5a1.5 1.5 0 0 0 1.5 1.5h9" }],
+  ],
+  "file-plus": [
+    ["path", { d: "M7 3.5h6.5l4.5 4.5v10.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" }],
+    ["path", { d: "M13.5 3.5V8H18" }],
+    ["path", { d: "M11.5 11v6M8.5 14h6" }],
+  ],
+  "folder-plus": [
+    ["path", { d: "M3.5 7.5a2 2 0 0 1 2-2h3.8l2 2.2h7.2a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" }],
+    ["path", { d: "M12 11v5M9.5 13.5h5" }],
+  ],
+  save: [
+    ["path", { d: "M5.5 4.5h10.3l3.7 3.7v10.3a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z" }],
+    ["path", { d: "M8 4.5v4.5h7V4.5" }],
+    ["rect", { x: "8", y: "13", width: "8", height: "6.5" }],
+  ],
+  "panel-bottom": [
+    ["rect", { x: "3.5", y: "4.5", width: "17", height: "15", rx: "2" }],
+    ["path", { d: "M3.5 14.5h17" }],
+  ],
+  "panel-right": [
+    ["rect", { x: "3.5", y: "4.5", width: "17", height: "15", rx: "2" }],
+    ["path", { d: "M14 4.5v15" }],
+  ],
+  maximize: [["path", { d: "M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15" }]],
+  collapse: [["path", { d: "M7 9l5-4 5 4M7 15l5 4 5-4" }]],
+  // The BrowserOS mark: a window whose corner gives way to a solid orb.
+  // The frame stops short of the orb, so the gap needs no mask.
+  browseros: [
+    ["path", { d: "M19.5 11.1V8a4 4 0 0 0-4-4h-9a4 4 0 0 0-4 4v7a4 4 0 0 0 4 4h5.1" }],
+    ["path", { d: "M2.5 8.5h17" }],
+    ["circle", { cx: "18.5", cy: "18", r: "4.25", fill: "currentColor", stroke: "none" }],
+  ],
+  notes: [
+    ["rect", { x: "5", y: "4", width: "14", height: "16.5", rx: "2.5" }],
+    ["path", { d: "M9 2.5v3M15 2.5v3" }],
+    ["path", { d: "M8.5 10h7M8.5 13.5h7M8.5 17h4" }],
+  ],
+  calculator: [
+    ["rect", { x: "5", y: "2.5", width: "14", height: "19", rx: "2.5" }],
+    ["path", { d: "M8.5 7h7" }],
+    ["circle", { cx: "9", cy: "12", r: "1.05", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "12", cy: "12", r: "1.05", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "15", cy: "12", r: "1.05", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "9", cy: "16.5", r: "1.05", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "12", cy: "16.5", r: "1.05", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "15", cy: "16.5", r: "1.05", fill: "currentColor", stroke: "none" }],
+  ],
+  compass: [
+    ["circle", { cx: "12", cy: "12", r: "8.5" }],
+    ["path", { d: "M15.3 8.7l-2 5.1-5.1 2 2-5.1z" }],
+  ],
+  "file-text": [
+    ["path", { d: "M6.5 3.5h7l4 4v13h-11z" }],
+    ["path", { d: "M13.5 3.5v4h4" }],
+    ["path", { d: "M9 12h6M9 15.5h6" }],
+  ],
+  "file-code": [
+    ["path", { d: "M6.5 3.5h7l4 4v13h-11z" }],
+    ["path", { d: "M13.5 3.5v4h4" }],
+    ["path", { d: "M10.2 11.5l-2 2.3 2 2.2M13.8 11.5l2 2.3-2 2.2" }],
+  ],
+  music: [
+    ["path", { d: "M9 17.5V6l10-2v11.5" }],
+    ["circle", { cx: "6.8", cy: "17.5", r: "2.2" }],
+    ["circle", { cx: "16.8", cy: "15.5", r: "2.2" }],
+  ],
+  video: [
+    ["rect", { x: "3", y: "6", width: "13", height: "12", rx: "2.5" }],
+    ["path", { d: "M16 10.5l5-3v9l-5-3" }],
+  ],
+  apps: [
+    ["rect", { x: "4", y: "4", width: "6.5", height: "6.5", rx: "1.6" }],
+    ["rect", { x: "13.5", y: "4", width: "6.5", height: "6.5", rx: "1.6" }],
+    ["rect", { x: "4", y: "13.5", width: "6.5", height: "6.5", rx: "1.6" }],
+    ["rect", { x: "13.5", y: "13.5", width: "6.5", height: "6.5", rx: "1.6" }],
+  ],
+  list: [
+    ["path", { d: "M9 7h11M9 12h11M9 17h11" }],
+    ["circle", { cx: "4.8", cy: "7", r: "1.1", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "4.8", cy: "12", r: "1.1", fill: "currentColor", stroke: "none" }],
+    ["circle", { cx: "4.8", cy: "17", r: "1.1", fill: "currentColor", stroke: "none" }],
+  ],
+  rows: [["path", { d: "M4 6.5h16M4 12h16M4 17.5h16" }]],
+  "window-minimize": [["path", { d: "M6.5 12.5h11" }]],
+  "window-maximize": [["rect", { x: "6.5", y: "6.5", width: "11", height: "11", rx: "2" }]],
+  "window-restore": [
+    ["rect", { x: "5.5", y: "8.5", width: "10", height: "10", rx: "2" }],
+    ["path", { d: "M9 5.5h7.5a2 2 0 0 1 2 2V15" }],
+  ],
+  arrowUp: [["path", { d: "M12 19V5.5M6 11.5l6-6 6 6" }]],
+  check: [["path", { d: "M5 12.5l4.5 4.5L19 7.5" }]],
+  power: [
+    ["path", { d: "M12 3.5v8" }],
+    ["path", { d: "M7.1 6.7a7.5 7.5 0 1 0 9.8 0" }],
+  ],
+  keyboard: [
+    ["rect", { x: "2.5", y: "6", width: "19", height: "12", rx: "2.5" }],
+    ["path", { d: "M6.5 10h.5M10 10h.5M13.5 10h.5M17 10h.5M7.5 14h9" }],
+  ],
+  contrast: [
+    ["circle", { cx: "12", cy: "12", r: "8.5" }],
+    ["path", { d: "M12 3.5a8.5 8.5 0 0 0 0 17z", fill: "currentColor" }],
+  ],
 });
 
 /**

@@ -75,13 +75,13 @@
 
 .browser-button--primary {
   border-color: transparent;
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   color: var(--color-text-on-accent);
   font-weight: 600;
 }
 
 .browser-button--primary:hover:not(:disabled) {
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary-strong);
   filter: brightness(1.08);
 }
 
@@ -425,7 +425,7 @@
   position: absolute;
   inset: 0;
   width: 35%;
-  background: var(--color-accent-gradient);
+  background: var(--color-accent-primary);
   animation: browser-loading 1.1s ease-in-out infinite;
 }
 

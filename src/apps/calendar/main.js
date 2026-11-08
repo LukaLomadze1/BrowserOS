@@ -96,7 +96,7 @@ export default class CalendarApp extends Application {
     return {
       element: this._root,
       title: "Calendar",
-      icon: "\u25a3",
+      icon: "icon:calendar",
       width: 1000,
       height: 680,
       minWidth: 520,
